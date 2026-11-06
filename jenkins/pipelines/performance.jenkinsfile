@@ -1,0 +1,33 @@
+
+timestamps {
+    timeout(time: 50, unit: 'MINUTES') {
+        try {
+            stage('Preparar JMeter') {
+                sh '''
+                    set -eu
+                    test -f stress/docker-compose.yaml
+                    test -f stress/plans/quickpizza.jmx
+
+                    mkdir -p stress/reports
+                    find stress/reports -type f -name '*.jtl' -delete
+                '''
+            }
+
+            stage('Ejecutar JMeter') {
+                sh '''
+                    set -eu
+                    docker compose -p stress \
+                        -f stress/docker-compose.yaml \
+                        run --rm -T --build jmeter
+                '''
+            }
+        } finally {
+            stage('Publicar resultados') {
+                archiveArtifacts(
+                    artifacts: 'stress/reports/**',
+                    allowEmptyArchive: true
+                )
+            }
+        }
+    }
+}

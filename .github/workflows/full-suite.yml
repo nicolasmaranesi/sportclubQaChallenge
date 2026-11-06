@@ -1,0 +1,165 @@
+name: SportClub QA - Full Suite
+
+on:
+  workflow_dispatch:
+
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sportclub-full-suite-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full-suite:
+    name: Jenkins + Docker + Android KVM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 210
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Comprobar recursos del runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version
+          docker compose version
+          df -h /
+          free -h
+          command -v jq
+
+      - name: Habilitar KVM para el emulador Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm || { echo 'ERROR: KVM no disponible en el runner'; exit 1; }
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+
+      - name: Preparar configuración temporal de Jenkins
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="$(openssl rand -hex 24)"
+          echo "::add-mask::$password"
+          {
+            printf 'JENKINS_ADMIN_PASSWORD=%s\n' "$password"
+            printf 'PROJECT_ROOT=%s\n' "$GITHUB_WORKSPACE"
+            # Las imagenes de Vitest usan UID 1000. Los reportes se comparten mediante volumen.
+            printf 'PUID=1000\n'
+            printf 'PGID=1000\n'
+          } >> "$GITHUB_ENV"
+          mkdir -p \
+            backend/reports \
+            web/reports web/playwright-report web/test-results \
+            mobile/reports mobile/e2e/evidence/jenkins \
+            stress/reports ci-artifacts
+          chmod -R a+rwX \
+            backend/reports \
+            web/reports web/playwright-report web/test-results \
+            mobile/reports mobile/e2e/evidence/jenkins \
+            stress/reports ci-artifacts
+
+      - name: Validar y levantar Jenkins
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose config --quiet
+          docker compose up -d --build jenkins
+
+      - name: Esperar inicialización y creación del job
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='http://127.0.0.1:8085/job/SportClub-Tests/job/00-Full-Suite/api/json'
+          for attempt in $(seq 1 120); do
+            if curl --silent --show-error --fail --max-time 5 \
+              -u "admin:${JENKINS_ADMIN_PASSWORD}" "$url" > /dev/null 2>&1; then
+              echo 'Jenkins inicializó y 00-Full-Suite está disponible.'
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'ERROR: Jenkins no logró inicializar el job.' >&2
+          exit 1
+
+      - name: Ejecutar 00-Full-Suite y esperar resultado
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='http://127.0.0.1:8085'
+          job="$base/job/SportClub-Tests/job/00-Full-Suite"
+          cookies="$(mktemp)"
+          trap 'rm -f "$cookies"' EXIT
+
+          # El admin se autentica con contraseña; Jenkins requiere crumb + cookie.
+          crumb_json="$(curl --fail --silent --show-error -c "$cookies" \
+            -u "admin:${JENKINS_ADMIN_PASSWORD}" "$base/crumbIssuer/api/json")"
+          crumb_field="$(jq -r '.crumbRequestField' <<< "$crumb_json")"
+          crumb_value="$(jq -r '.crumb' <<< "$crumb_json")"
+          test "$crumb_field" != null
+          test "$crumb_value" != null
+
+          curl --fail --silent --show-error \
+            -u "admin:${JENKINS_ADMIN_PASSWORD}" \
+            -b "$cookies" \
+            -H "$crumb_field: $crumb_value" \
+            -X POST "$job/build?delay=0sec" -o /dev/null
+
+          echo '00-Full-Suite solicitado. Esperando las seis suites...'
+          # Jenkins es temporal y comienza sin builds anteriores.
+          for attempt in $(seq 1 1050); do
+            result_json="$(curl --silent --show-error --fail --max-time 8 \
+              -u "admin:${JENKINS_ADMIN_PASSWORD}" \
+              "$job/lastBuild/api/json?tree=number,building,result" 2>/dev/null || true)"
+            if [[ -n "$result_json" ]]; then
+              building="$(jq -r '.building' <<< "$result_json")"
+              if [[ "$building" == 'false' ]]; then
+                result="$(jq -r '.result' <<< "$result_json")"
+                echo "Jenkins 00-Full-Suite finalizó con resultado: $result"
+                [[ "$result" == 'SUCCESS' ]]
+                exit $?
+              fi
+            fi
+            sleep 10
+          done
+          echo 'ERROR: Se agotó el tiempo de espera de Jenkins.' >&2
+          exit 1
+
+      - name: Recuperar logs de Jenkins y de las seis suites
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci-artifacts
+          docker compose logs --no-color jenkins > ci-artifacts/jenkins-container.log 2>&1 || true
+          base='http://127.0.0.1:8085/job/SportClub-Tests/job'
+          for suite in 00-Full-Suite 01-Backend-API 02-Web-Unit 03-Mobile-Unit 04-Web-E2E 05-Mobile-E2E 06-Performance; do
+            curl --silent --show-error --fail --max-time 30 \
+              -u "admin:${JENKINS_ADMIN_PASSWORD:-}" \
+              "$base/$suite/lastBuild/consoleText" \
+              -o "ci-artifacts/$suite.log" || true
+          done
+
+      - name: Publicar reportes y evidencias
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sportclub-qa-results
+          retention-days: 7
+          if-no-files-found: warn
+          path: |
+            ci-artifacts/**
+            backend/reports/**
+            web/reports/**
+            web/playwright-report/**
+            web/test-results/**
+            mobile/reports/**
+            mobile/e2e/evidence/**
+            stress/reports/**

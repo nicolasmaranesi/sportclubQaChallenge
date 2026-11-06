@@ -1,0 +1,534 @@
+{
+  "info": {
+    "name": "SportClub Challenge | Bloque B - Products",
+    "description": "Pruebas funcionales DummyJSON. Ejecutar en orden: relaciones entre list, detail, POST, PATCH y DELETE. Las mutaciones son simuladas.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 - Catalogo, filtros y CRUD simulado",
+      "item": [
+        {
+          "name": "API-PROD-01 | Listado inicial de productos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products?limit={{pageSize}}&skip=0",
+            "description": "Primer listado que provee un productId y un titulo base a los escenarios siguientes.\n\nEsperado: HTTP 200; products, total, skip=0, limit configurado y productos validos."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - listado', () => pm.response.to.have.status(200));",
+                  "pm.test('Estructura de listado', () => {",
+                  " const j=pm.response.json(); const limit=Number(pm.environment.get('pageSize'));",
+                  " pm.expect(j.products).to.be.an('array').that.is.not.empty;",
+                  " pm.expect(j.products.length).to.be.at.most(limit);",
+                  " pm.expect(j.total).to.be.a('number').above(0);",
+                  " pm.expect(j.skip).to.eql(0); pm.expect(j.limit).to.eql(limit);",
+                  " j.products.forEach(p => {",
+                  "  pm.expect(p.id).to.be.a('number').above(0);",
+                  "  pm.expect(p.title).to.be.a('string').and.not.empty;",
+                  "  pm.expect(p.price).to.be.a('number').at.least(0);",
+                  "  pm.expect(p.category).to.be.a('string').and.not.empty;",
+                  " });",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  " const j=pm.response.json();",
+                  " if (j.products && j.products.length) {",
+                  "  pm.collectionVariables.set('productId', String(j.products[0].id));",
+                  "  pm.collectionVariables.set('originalTitle', j.products[0].title);",
+                  "  pm.collectionVariables.set('originalPrice', String(j.products[0].price));",
+                  "  pm.collectionVariables.set('pageOneIds', JSON.stringify(j.products.map(p=>p.id)));",
+                  "  pm.collectionVariables.set('initialTotal', String(j.total));",
+                  " }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-02 | Detalle de producto relacionado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/{{productId}}",
+            "description": "Consulta relacionada al id capturado en API-PROD-01.\n\nEsperado: HTTP 200; detalle concuerda con el primer elemento del listado."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - detalle', () => pm.response.to.have.status(200));",
+                  "pm.test('Detalle consistente con listado', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.id).to.eql(Number(pm.collectionVariables.get('productId')));",
+                  " pm.expect(j.title).to.eql(pm.collectionVariables.get('originalTitle'));",
+                  " pm.expect(j.price).to.eql(Number(pm.collectionVariables.get('originalPrice')));",
+                  " pm.expect(j.description).to.be.a('string').and.not.empty;",
+                  " pm.expect(j.images).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-03 | Paginacion segunda pagina",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products?limit={{pageSize}}&skip={{pageSize}}",
+            "description": "La pagina 2 debe contener otros IDs sin alterar total, si el dataset no cambio.\n\nEsperado: HTTP 200; skip y limit correctos; sin productos repetidos entre paginas."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - pagina 2', () => pm.response.to.have.status(200));",
+                  "pm.test('Paginacion sin duplicados', () => {",
+                  " const j=pm.response.json(); const n=Number(pm.environment.get('pageSize'));",
+                  " const previous=JSON.parse(pm.collectionVariables.get('pageOneIds') || '[]');",
+                  " pm.expect(j.skip).to.eql(n); pm.expect(j.limit).to.eql(n);",
+                  " pm.expect(j.total).to.eql(Number(pm.collectionVariables.get('initialTotal')));",
+                  " pm.expect(j.products).to.be.an('array');",
+                  " pm.expect(j.products.length).to.be.at.most(n);",
+                  " const current=j.products.map(p=>p.id);",
+                  " pm.expect(new Set(current).size).to.eql(current.length);",
+                  " pm.expect(current.some(id=>previous.includes(id))).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-04 | Busqueda de productos",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/search?q={{searchQuery}}",
+            "description": "Busqueda textual. No se exige que todas las coincidencias esten en title: DummyJSON puede buscar en otros campos.\n\nEsperado: HTTP 200; resultados no vacios con IDs validos y metadatos de busqueda consistentes."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - busqueda', () => pm.response.to.have.status(200));",
+                  "pm.test('Busqueda devuelve resultados validos', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.products).to.be.an('array').that.is.not.empty;",
+                  " pm.expect(j.total).to.be.a('number').above(0);",
+                  " pm.expect(j.skip).to.eql(0);",
+                  " pm.expect(j.products.length).to.be.at.most(j.total);",
+                  " pm.expect(new Set(j.products.map(p=>p.id)).size).to.eql(j.products.length);",
+                  " j.products.forEach(p=> { pm.expect(p.title).to.be.a('string').and.not.empty; pm.expect(p.id).to.be.a('number'); });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-05 | Ordenamiento ascendente por precio",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products?sortBy=price&order=asc&limit={{sortLimit}}",
+            "description": "Valida realmente la relacion entre items consecutivos, no solo el status.\n\nEsperado: HTTP 200; precios ordenados de menor a mayor."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - ordenamiento', () => pm.response.to.have.status(200));",
+                  "pm.test('Precios en orden ascendente', () => {",
+                  " const j=pm.response.json(); const prices=j.products.map(p=>p.price);",
+                  " pm.expect(prices.length).to.be.above(1);",
+                  " pm.expect(prices.length).to.be.at.most(Number(pm.environment.get('sortLimit')));",
+                  " for (let i=1; i<prices.length; i++) pm.expect(prices[i], 'Precio de indice '+i).to.be.at.least(prices[i-1]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-06 | Filtro por categoria",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/category/{{category}}",
+            "description": "Prueba de integridad del filtro de categoria.\n\nEsperado: HTTP 200; todos los productos pertenecen a la categoria solicitada."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - categoria', () => pm.response.to.have.status(200));",
+                  "pm.test('Filtro aplicado a cada item', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.products).to.be.an('array').that.is.not.empty;",
+                  " pm.expect(j.total).to.be.a('number').above(0);",
+                  " j.products.forEach(p=>pm.expect(p.category).to.eql(pm.environment.get('category')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-07 | Alta simulada de producto",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/add",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{newProductTitle}}\",\n  \"price\": {{newProductPrice}},\n  \"stock\": {{newProductStock}},\n  \"category\": \"{{category}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "No persiste en la base de datos. El ID se utiliza en API-PROD-08.\n\nEsperado: HTTP 201; producto devuelto con nuevo id, titulo, precio, stock y categoria enviados."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201 - alta simulada', () => pm.response.to.have.status(201));",
+                  "pm.test('Alta refleja el payload enviado', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.id).to.be.a('number').above(0);",
+                  " pm.expect(j.title).to.eql(pm.environment.get('newProductTitle'));",
+                  " pm.expect(j.price).to.eql(Number(pm.environment.get('newProductPrice')));",
+                  " pm.expect(j.stock).to.eql(Number(pm.environment.get('newProductStock')));",
+                  " pm.expect(j.category).to.eql(pm.environment.get('category'));",
+                  "});",
+                  "if (pm.response.code === 201) {",
+                  " const j=pm.response.json(); if (j.id) pm.collectionVariables.set('createdProductId', String(j.id));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-08 | Alta no persistida",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/{{createdProductId}}",
+            "description": "Valida explicitamente una limitacion documentada de la API mock.\n\nEsperado: HTTP 404; el producto añadido en /products/add no existe realmente."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404 - alta no persistida', () => pm.response.to.have.status(404));",
+                  "pm.test('No se puede consultar el producto simulado', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.message || j.error).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-09 | Modificacion PATCH simulada",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/{{productId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"{{updatedProductTitle}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Solo el response refleja la actualizacion; la lectura posterior debe devolver el dato original.\n\nEsperado: HTTP 200; titulo modificado en el response y resto del producto consistente."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - modificacion simulada', () => pm.response.to.have.status(200));",
+                  "pm.test('El response refleja el PATCH', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.id).to.eql(Number(pm.collectionVariables.get('productId')));",
+                  " pm.expect(j.title).to.eql(pm.environment.get('updatedProductTitle'));",
+                  " pm.expect(j.price).to.eql(Number(pm.collectionVariables.get('originalPrice')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-10 | PATCH no persistido",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/{{productId}}",
+            "description": "Confirma el comportamiento simulado descrito por DummyJSON.\n\nEsperado: HTTP 200; titulo original sin cambios tras PATCH simulado."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - consulta despues de PATCH', () => pm.response.to.have.status(200));",
+                  "pm.test('Update no se persiste', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.id).to.eql(Number(pm.collectionVariables.get('productId')));",
+                  " pm.expect(j.title).to.eql(pm.collectionVariables.get('originalTitle'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-11 | Eliminacion DELETE simulada",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/{{productId}}",
+            "description": "Borrado simulado de un producto que existia antes del test.\n\nEsperado: HTTP 200; isDeleted=true y deletedOn fecha ISO valida."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - delete simulado', () => pm.response.to.have.status(200));",
+                  "pm.test('Marcado de eliminacion y fecha', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.id).to.eql(Number(pm.collectionVariables.get('productId')));",
+                  " pm.expect(j.isDeleted).to.eql(true);",
+                  " pm.expect(j.deletedOn).to.be.a('string').and.not.empty;",
+                  " pm.expect(Number.isNaN(Date.parse(j.deletedOn))).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-12 | DELETE no persistido",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/{{productId}}",
+            "description": "Aunque el DELETE devuelve isDeleted=true, DummyJSON no elimina el producto.\n\nEsperado: HTTP 200; producto original sigue accesible."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - lectura despues del DELETE', () => pm.response.to.have.status(200));",
+                  "pm.test('El producto no fue realmente borrado', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.id).to.eql(Number(pm.collectionVariables.get('productId')));",
+                  " pm.expect(j.title).to.eql(pm.collectionVariables.get('originalTitle'));",
+                  " pm.expect(j.isDeleted).not.to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-13 | Producto inexistente",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/{{notFoundProductId}}",
+            "description": "Negativo de recurso no encontrado.\n\nEsperado: HTTP 404; mensaje de error sin producto valido."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 404 - producto inexistente', () => pm.response.to.have.status(404));",
+                  "pm.test('Respuesta de error coherente', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.message || j.error).to.be.a('string').and.not.empty;",
+                  " pm.expect(j).not.to.have.property('price');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-PROD-14 | Busqueda sin resultados",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/products/search?q={{noMatchQuery}}",
+            "description": "Estado alternativo vacio: no debe tratarse como error HTTP.\n\nEsperado: HTTP 200; products=[], total=0."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - busqueda vacia', () => pm.response.to.have.status(200));",
+                  "pm.test('Busqueda sin matches', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.products).to.be.an('array').that.is.empty;",
+                  " pm.expect(j.total).to.eql(0); pm.expect(j.skip).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "originalTitle",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "originalPrice",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pageOneIds",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "initialTotal",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "createdProductId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

@@ -1,0 +1,59 @@
+
+timestamps {
+    timeout(time: 70, unit: 'MINUTES') {
+        try {
+            stage('Preparar Mobile E2E') {
+                sh '''
+                    set -eu
+                    test -f mobile/docker-compose.yml
+                    test -f mobile/e2e/sedes-visitante.yaml
+                    mkdir -p mobile/e2e/evidence/jenkins
+                    rm -f mobile/e2e/evidence/jenkins/maestro-junit.xml
+                '''
+            }
+
+            stage('Construir imagenes Mobile') {
+                sh '''
+                    set -eu
+                    docker compose -p mobile -f mobile/docker-compose.yml \
+                        build maestro android-emulator
+                '''
+            }
+
+            stage('Levantar emulador y Maestro') {
+                sh '''
+                    set -eu
+                    docker compose -p mobile -f mobile/docker-compose.yml \
+                        up -d --no-build maestro
+                    docker compose -p mobile -f mobile/docker-compose.yml ps -a
+                '''
+            }
+
+            stage('Ejecutar Mobile E2E - Maestro') {
+                sh '''
+                    set -eu
+                    docker compose -p mobile -f mobile/docker-compose.yml \
+                        exec -T maestro sh -lc 'mkdir -p /work/e2e/evidence/jenkins'
+                    docker compose -p mobile -f mobile/docker-compose.yml \
+                        exec -T maestro maestro --device android-emulator:5555 \
+                        test --format junit \
+                        --output /work/e2e/evidence/jenkins/maestro-junit.xml \
+                        /work/e2e/sedes-visitante.yaml
+                '''
+            }
+        } finally {
+            stage('Publicar resultados Mobile E2E') {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    junit(
+                        testResults: 'mobile/e2e/evidence/jenkins/maestro-junit.xml',
+                        allowEmptyResults: false
+                    )
+                }
+                archiveArtifacts(
+                    artifacts: 'mobile/e2e/evidence/**',
+                    allowEmptyArchive: true
+                )
+            }
+        }
+    }
+}

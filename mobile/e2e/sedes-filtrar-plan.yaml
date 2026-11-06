@@ -1,0 +1,14 @@
+appId: com.muvinai.carnet2
+name: "MOBILE-E2E - Sedes: aplicar filtro Flex"
+tags:
+  - functional
+  - sedes
+---
+- runFlow: common/abrir-sedes.yaml
+- runFlow: common/abrir-filtros.yaml
+- assertVisible: "Flex"
+- tapOn: "Flex"
+- takeScreenshot: "MOBILE-E2E-plan-flex-seleccionado"
+- tapOn: "Aplicar"
+- assertVisible: "Filtros"
+- takeScreenshot: "MOBILE-E2E-plan-flex-aplicado"

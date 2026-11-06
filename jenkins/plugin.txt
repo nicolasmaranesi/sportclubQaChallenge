@@ -1,0 +1,10 @@
+configuration-as-code
+job-dsl
+workflow-aggregator
+pipeline-stage-view
+junit
+git
+credentials-binding
+timestamper
+cloudbees-folder
+pipeline-build-step

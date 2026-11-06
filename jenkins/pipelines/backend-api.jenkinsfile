@@ -1,0 +1,30 @@
+timestamps {
+    timeout(time: 20, unit: 'MINUTES') {
+        try {
+            stage('Preparar Newman') {
+                sh '''
+                    set -eu
+                    test -f backend/docker-compose.yml || test -f backend/docker-compose.yaml
+                    mkdir -p backend/reports
+                    rm -f backend/reports/*-results.xml
+                '''
+            }
+            stage('Ejecutar Backend API') {
+                sh '''
+                    set -eu
+                    compose_file=backend/docker-compose.yml
+                    [ -f "$compose_file" ] || compose_file=backend/docker-compose.yaml
+                    docker compose -p backend -f "$compose_file" \
+                        run --rm -T --build api-tests
+                '''
+            }
+        } finally {
+            stage('Publicar resultados Backend API') {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    junit(testResults: 'backend/reports/*-results.xml', allowEmptyResults: false)
+                }
+                archiveArtifacts(artifacts: 'backend/reports/**', allowEmptyArchive: true)
+            }
+        }
+    }
+}

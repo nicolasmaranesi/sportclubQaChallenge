@@ -1,0 +1,7 @@
+# El respaldo contiene credenciales / datos privados. Nunca versionar sus copias.
+*.tar
+*.tar.gz
+*.gpg
+*.key
+adbkey
+adbkey.pub

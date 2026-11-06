@@ -1,0 +1,31 @@
+
+appId: com.muvinai.carnet2
+name: "MOBILE-E2E - Sedes: buscar Belgrano"
+tags:
+  - functional
+  - sedes
+---
+- runFlow: common/abrir-sedes.yaml
+
+- runFlow: common/abrir-filtros.yaml
+
+- runFlow:
+    file: common/buscar-sede.yaml
+    env:
+      TERMINO: "Belgrano"
+
+- takeScreenshot: "MOBILE-E2E--antes-validacion"
+
+- scrollUntilVisible:
+    element:
+      text: ".*(Social Club Villa Gral Belgrano|ManuelBelgrano Maschwitz|NGA Belgrano).*"
+    direction: UP
+    timeout: 20000
+    visibilityPercentage: 50
+
+- assertVisible:
+    text: ".*(Social Club Villa Gral Belgrano|ManuelBelgrano Maschwitz|NGA Belgrano).*"
+
+- assertNotVisible: ".*No encontramos sedes.*"
+
+- takeScreenshot: "MOBILE-E2E-busqueda-exitosa"

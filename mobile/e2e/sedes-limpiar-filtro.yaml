@@ -1,0 +1,23 @@
+appId: com.muvinai.carnet2
+name: "MOBILE-E2E - Sedes: limpiar filtros"
+tags:
+  - functional
+  - sedes
+---
+- runFlow: common/abrir-sedes.yaml
+- runFlow: common/abrir-filtros.yaml
+- tapOn: "Flex"
+- tapOn: "Aplicar"
+- assertVisible: "Filtros"
+- runFlow: common/abrir-filtros.yaml
+- assertVisible: "Limpiar filtros"
+- tapOn: "Limpiar filtros"
+
+- runFlow:
+    when:
+      visible: "Aplicar"
+    commands:
+      - tapOn: "Aplicar"
+- assertVisible: "Filtros"
+
+- takeScreenshot: "MOBILE-E2E-filtros-limpiados"

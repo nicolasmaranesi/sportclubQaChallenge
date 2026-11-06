@@ -1,0 +1,47 @@
+
+timestamps {
+    timeout(time: 20, unit: 'MINUTES') {
+        try {
+            stage('Preparar Web Unit') {
+                sh '''
+                    set -eu
+
+                    test -f web/docker-compose.yaml
+                    test -f web/tests/checkout.unit.test.ts
+
+                    mkdir -p web/reports
+                    rm -f web/reports/unit-results.xml
+                '''
+            }
+
+            stage('Ejecutar Web Unit - Vitest') {
+                sh '''
+                    set -eu
+
+                    docker compose -p web \
+                        -f web/docker-compose.yaml \
+                        run --rm -T --build web-unit
+
+                    test -s web/reports/unit-results.xml
+                '''
+            }
+
+        } finally {
+            stage('Publicar resultados Web Unit') {
+                if (fileExists('web/reports/unit-results.xml')) {
+                    junit(
+                        testResults: 'web/reports/unit-results.xml',
+                        allowEmptyResults: false
+                    )
+                } else {
+                    echo 'No se genero el reporte JUnit de Web Unit.'
+                }
+
+                archiveArtifacts(
+                    artifacts: 'web/reports/**',
+                    allowEmptyArchive: true
+                )
+            }
+        }
+    }
+}

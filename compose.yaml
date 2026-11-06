@@ -1,0 +1,44 @@
+
+services:
+  jenkins:
+    build:
+      context: ./jenkins
+      dockerfile: Dockerfile
+
+    image: sportclub/jenkins:local
+    container_name: sportclub-jenkins
+
+    restart: unless-stopped
+    user: root
+
+    ports:
+      - "127.0.0.1:8085:8080"
+
+    environment:
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false"
+      CASC_JENKINS_CONFIG: /opt/jenkins/casc.yml
+
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?Definir JENKINS_ADMIN_PASSWORD}
+
+      PROJECT_ROOT: ${PROJECT_ROOT:-${PWD:?Definir PROJECT_ROOT}}
+
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+
+    volumes:
+      - jenkins_home:/var/jenkins_home
+
+      # Jenkins utiliza Docker del host
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # Repositorio compartido
+      - type: bind
+        source: ${PROJECT_ROOT:-${PWD:?Definir PROJECT_ROOT}}
+        target: ${PROJECT_ROOT:-${PWD:?Definir PROJECT_ROOT}}
+
+      # Jenkins Configuration as Code
+      - ./jenkins/casc.yml:/opt/jenkins/casc.yml:ro
+      - ./jenkins/jobs.groovy:/opt/jenkins/jobs.groovy:ro
+
+volumes:
+  jenkins_home:

@@ -1,0 +1,135 @@
+
+services:
+  
+  adb-keygen:
+    image: sportclub/maestro:local
+    pull_policy: never
+    container_name: sportclub-adb-keygen
+
+    volumes:
+      - adb-keys:/keys
+
+    command:
+      - sh
+      - -ec
+      - |
+        umask 077
+
+        if [ ! -s /keys/adbkey ]; then
+          echo "Generando clave privada ADB..."
+
+          if ! adb keygen /keys/adbkey; then
+            echo "Verificando clave privada generada..."
+          fi
+        else
+          echo "Reutilizando clave privada ADB"
+        fi
+
+        if [ ! -s /keys/adbkey ]; then
+          echo "ERROR: No se pudo generar la clave privada"
+          exit 1
+        fi
+
+        echo "Generando clave pública desde la privada..."
+
+        adb pubkey /keys/adbkey > /keys/adbkey.pub.tmp
+
+        if [ ! -s /keys/adbkey.pub.tmp ]; then
+          echo "ERROR: No se pudo generar la clave pública"
+          exit 1
+        fi
+
+        mv /keys/adbkey.pub.tmp /keys/adbkey.pub
+
+        chmod 600 /keys/adbkey
+        chmod 644 /keys/adbkey.pub
+        chown 1000:1000 /keys/adbkey /keys/adbkey.pub
+
+        echo "Claves ADB preparadas correctamente"
+
+    restart: "no"
+
+  android-emulator:
+    build:
+      context: ./docker/android
+      dockerfile: Dockerfile
+
+    image: sportclub/android-persistent:13
+    container_name: sportclub-android
+
+    depends_on:
+      adb-keygen:
+        condition: service_completed_successfully
+
+    devices:
+      - /dev/kvm:/dev/kvm
+
+    ports:
+      - "127.0.0.1:5555:5555"
+      - "127.0.0.1:8554:8554"
+
+    shm_size: "2gb"
+
+    volumes:
+      - android-playstore-data:/data
+      - adb-keys:/run/secrets:ro
+
+  android-setup:
+    image: sportclub/maestro:local
+    pull_policy: never
+    container_name: sportclub-android-setup
+
+    depends_on:
+      android-emulator:
+        condition: service_healthy
+
+    environment:
+      ADB_VENDOR_KEYS: /keys/adbkey
+
+    working_dir: /work
+
+    volumes:
+      - ./:/work:ro
+      - adb-keys:/keys:ro
+
+    command:
+      - sh
+      - /work/scripts/android-setup.sh
+
+    restart: "no"
+
+  maestro:
+    build:
+      context: ./docker/maestro
+      dockerfile: dockerfile
+
+    image: sportclub/maestro:local
+    container_name: sportclub-maestro
+
+    depends_on:
+      android-setup:
+        condition: service_completed_successfully
+
+    environment:
+      ADB_VENDOR_KEYS: /keys/adbkey
+      MAESTRO_CLI_NO_ANALYTICS: "true"
+
+    working_dir: /work
+
+    volumes:
+      - ./:/work
+      - adb-keys:/keys:ro
+
+    command:
+      - sh
+      - -c
+      - |
+        adb connect android-emulator:5555
+        exec sleep infinity
+
+volumes:
+  android-playstore-data:
+    name: mobile_android-playstore-data
+
+  adb-keys:
+    name: mobile_adb-keys

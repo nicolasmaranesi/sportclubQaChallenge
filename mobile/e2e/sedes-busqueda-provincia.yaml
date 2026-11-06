@@ -1,0 +1,35 @@
+appId: com.muvinai.carnet2
+name: "MOBILE-E2E - Regresion: busqueda, provincia CABA y scroll"
+tags:
+  - regression
+  - sedes
+  - known-bug
+---
+
+
+- runFlow: common/abrir-sedes.yaml
+- runFlow: common/abrir-filtros.yaml
+
+- tapOn:
+    point: "50%,40%"
+- inputText: "SportClub"
+- hideKeyboard
+- tapOn: "Aplicar"
+
+- swipe:
+    start: "65%,85%"
+    end: "65%,58%"
+    duration: 550
+- takeScreenshot: "MOB-E2E-01-listado-desplazado"
+
+- tapOn:
+    id: "phosphor-react-native-sliders-undefined"
+- assertVisible: "Aplicar"
+- tapOn: "Provincia, ▼"
+- assertVisible: "CABA"
+- tapOn: "CABA"
+- tapOn: "Aplicar"
+
+- assertVisible: "Filtros"
+- takeScreenshot: "MOB-E2E-02-listado-tras-filtro-caba"
+

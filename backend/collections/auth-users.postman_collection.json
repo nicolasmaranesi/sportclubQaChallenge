@@ -1,0 +1,319 @@
+{
+  "info": {
+    "name": "SportClub Challenge | Bloque A - Auth & Users",
+    "description": "Pruebas funcionales DummyJSON. Ejecutar en orden para preservar token e identidad obtenidos en el login. Tokens solo en variables temporales de la coleccion.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 - Autenticacion y autorizacion",
+      "item": [
+        {
+          "name": "API-AUTH-01 | Bearer invalido rechazado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{invalidAccessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me",
+            "description": "Caso negativo de autorizacion. Se ejecuta antes del login para evitar contaminacion por cookies en Newman.\n\nEsperado: HTTP 500; el servidor no responde."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 500 - token invalido', () => pm.response.to.have.status(500));",
+                  "pm.test('Error en formato JSON', () => { const j=pm.response.json(); pm.expect(j).to.be.an('object'); pm.expect(j.message || j.error).to.be.a('string').and.not.empty; pm.expect(j).not.to.have.property('username'); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-AUTH-02 | Login valido y obtencion de tokens",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{password}}\",\n  \"expiresInMins\": {{expiresInMins}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Credenciales demo de DummyJSON. Guardar tokens solo en variables de coleccion de ejecucion.\n\nEsperado: HTTP 200; accessToken y refreshToken JWT; identidad coincide con usuario configurado."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - login', () => pm.response.to.have.status(200));",
+                  "pm.test('Usuario y tokens en respuesta', () => {",
+                  "  const j=pm.response.json();",
+                  "  pm.expect(j.id).to.be.a('number').above(0);",
+                  "  pm.expect(j.username).to.eql(pm.environment.get('username'));",
+                  "  pm.expect(j.email).to.be.a('string').and.include('@');",
+                  "  pm.expect(j.firstName).to.be.a('string').and.not.empty;",
+                  "  pm.expect(j.lastName).to.be.a('string').and.not.empty;",
+                  "  pm.expect(j.accessToken).to.match(/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/);",
+                  "  pm.expect(j.refreshToken).to.match(/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "  const j=pm.response.json();",
+                  "  if (j.id && j.accessToken && j.refreshToken) {",
+                  "    pm.collectionVariables.set('authUserId', String(j.id));",
+                  "    pm.collectionVariables.set('authEmail', j.email);",
+                  "    pm.collectionVariables.set('accessToken', j.accessToken);",
+                  "    pm.collectionVariables.set('refreshToken', j.refreshToken);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-AUTH-03 | Consulta de usuario autenticado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me",
+            "description": "Bearer obtenido dinamicamente en AUTH-02.\n\nEsperado: HTTP 200; perfil coincide con el usuario del login."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - perfil', () => pm.response.to.have.status(200));",
+                  "pm.test('Identidad consistente con login', () => {",
+                  "  const j=pm.response.json();",
+                  "  pm.expect(j.id).to.eql(Number(pm.collectionVariables.get('authUserId')));",
+                  "  pm.expect(j.username).to.eql(pm.environment.get('username'));",
+                  "  pm.expect(j.email).to.eql(pm.collectionVariables.get('authEmail'));",
+                  "  pm.expect(j.firstName).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-AUTH-04 | Cruce de datos con Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users/{{authUserId}}",
+            "description": "Consulta del usuario publico referenciado por el login para comprobar consistencia entre recursos.\n\nEsperado: HTTP 200; id, username y email iguales a /auth/me y al login."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - usuario por ID', () => pm.response.to.have.status(200));",
+                  "pm.test('Consistencia Auth / Users', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.id).to.eql(Number(pm.collectionVariables.get('authUserId')));",
+                  " pm.expect(j.username).to.eql(pm.environment.get('username'));",
+                  " pm.expect(j.email).to.eql(pm.collectionVariables.get('authEmail'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-AUTH-05 | Renovacion de sesion",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"expiresInMins\": {{expiresInMins}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Usa refreshToken de AUTH-02 y actualiza accessToken para la siguiente consulta.\n\nEsperado: HTTP 200; nuevos JWT utilizables sin volver a enviar credenciales."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - refresh', () => pm.response.to.have.status(200));",
+                  "pm.test('Nuevos JWT en respuesta', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.accessToken).to.match(/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/);",
+                  " pm.expect(j.refreshToken).to.match(/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$/);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  " const j=pm.response.json();",
+                  " if (j.accessToken && j.refreshToken) {",
+                  "  pm.collectionVariables.set('accessToken', j.accessToken);",
+                  "  pm.collectionVariables.set('refreshToken', j.refreshToken);",
+                  " }",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-AUTH-06 | Perfil con token renovado",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/me",
+            "description": "Validacion end-to-end de refresh: no basta con recibir un JWT; debe servir para llamar a /auth/me.\n\nEsperado: HTTP 200; el token renovado autentica al mismo usuario."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200 - sesion renovada', () => pm.response.to.have.status(200));",
+                  "pm.test('Sesion renovada mantiene identidad', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j.id).to.eql(Number(pm.collectionVariables.get('authUserId')));",
+                  " pm.expect(j.username).to.eql(pm.environment.get('username'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "API-AUTH-07 | Login con password incorrecta",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"{{username}}\",\n  \"password\": \"{{wrongPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Escenario negativo: un usuario valido con contraseña incorrecta no obtiene sesion.\n\nEsperado: HTTP 400; error de credenciales; sin accessToken ni refreshToken."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 400 - credenciales invalidas', () => pm.response.to.have.status(400));",
+                  "pm.test('No se entrega una sesion', () => {",
+                  " const j=pm.response.json();",
+                  " pm.expect(j).to.be.an('object');",
+                  " pm.expect(j.message || j.error).to.be.a('string').and.not.empty;",
+                  " pm.expect(j).not.to.have.property('accessToken');",
+                  " pm.expect(j).not.to.have.property('refreshToken');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authUserId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "authEmail",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

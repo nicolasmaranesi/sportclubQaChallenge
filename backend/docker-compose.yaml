@@ -1,0 +1,20 @@
+services:
+  api-tests:
+    image: sportclub/api-tests:local
+
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+
+    working_dir: /work/backend
+
+    environment:
+      TEST_ENV: ${TEST_ENV:-ci}
+      BASE_URL: ${BASE_URL:-}
+      DUMMYJSON_USERNAME: ${DUMMYJSON_USERNAME:-}
+      DUMMYJSON_PASSWORD: ${DUMMYJSON_PASSWORD:-}
+
+    volumes:
+      - ./reports:/work/backend/reports
+
+    restart: "no"

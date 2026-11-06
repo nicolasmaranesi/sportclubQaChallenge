@@ -1,0 +1,11 @@
+
+appId: com.muvinai.carnet2
+---
+- tapOn:
+    id: "phosphor-react-native-sliders-undefined"
+
+- extendedWaitUntil:
+    visible: "Aplicar"
+    timeout: 10000
+
+- takeScreenshot: "panel-filtros-abierto"

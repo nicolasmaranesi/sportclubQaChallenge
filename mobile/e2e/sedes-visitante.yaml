@@ -1,0 +1,10 @@
+appId: com.muvinai.carnet2
+name: "MOBILE-E2E - Sedes: navegacion y carga"
+tags:
+  - smoke
+  - sedes
+---
+- runFlow: common/abrir-sedes.yaml
+- assertVisible: "Google Map"
+- assertVisible: "Filtros"
+- takeScreenshot: "MOBILE-E2E-sedes-cargadas"

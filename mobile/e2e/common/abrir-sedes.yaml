@@ -1,0 +1,9 @@
+appId: com.muvinai.carnet2
+---
+
+- launchApp:
+    clearState: false
+- assertVisible: "Sedes"
+- tapOn: "Sedes"
+- assertVisible: "Filtros"
+- assertVisible: "Google Map"

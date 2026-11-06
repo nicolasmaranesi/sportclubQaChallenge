@@ -1,0 +1,33 @@
+timestamps {
+    timeout(time: 25, unit: 'MINUTES') {
+        try {
+            stage('Preparar Mobile Unit') {
+                sh '''
+                    set -eu
+                    test -f package.json
+                    test -f package-lock.json
+                    test -f mobile/tests/sedes.unit.test.ts
+                    mkdir -p mobile/reports
+                    rm -f mobile/reports/unit-results.xml
+                '''
+            }
+            stage('Ejecutar Mobile Unit — Vitest') {
+                sh '''
+                    set -eu
+                    docker build -t sportclub/mobile-unit:local \
+                        -f jenkins/mobile-unit/Dockerfile .
+                    docker run --rm \
+                        --mount "type=bind,source=$PROJECT_ROOT/mobile/reports,target=/workspace/mobile/reports" \
+                        sportclub/mobile-unit:local
+                '''
+            }
+        } finally {
+            stage('Publicar resultados Mobile Unit') {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    junit(testResults: 'mobile/reports/unit-results.xml', allowEmptyResults: false)
+                }
+                archiveArtifacts(artifacts: 'mobile/reports/**', allowEmptyArchive: true)
+            }
+        }
+    }
+}

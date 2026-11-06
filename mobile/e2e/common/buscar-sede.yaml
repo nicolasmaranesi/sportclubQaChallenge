@@ -1,0 +1,17 @@
+
+appId: com.muvinai.carnet2
+---
+
+- tapOn:
+    point: "50%,40%"
+
+- eraseText
+
+- inputText: "${TERMINO}"
+
+
+- hideKeyboard
+
+- takeScreenshot: "buscador-con-texto"
+
+- tapOn: "Aplicar"

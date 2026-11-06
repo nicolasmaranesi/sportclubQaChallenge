@@ -1,0 +1,54 @@
+
+services:
+
+  web-e2e:
+    image: sportclub/web-e2e:local
+
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+
+    init: true
+    ipc: host
+
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    environment:
+      CI: "true"
+      SPORTCLUB_URL: "https://www.sportclub.com.ar"
+
+    volumes:
+      - ./reports:/app/reports
+      - ./playwright-report:/app/playwright-report
+      - ./test-results:/app/test-results
+
+    command:
+      - ./node_modules/.bin/playwright
+      - test
+      - --project=chromium
+
+
+  web-unit:
+    image: sportclub/web-unit:local
+
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.unit
+
+    working_dir: /app
+
+    user: "${PUID:-1000}:${PGID:-1000}"
+
+    environment:
+      CI: "true"
+
+    volumes:
+      - ./reports:/app/reports
+
+    command:
+      - ./node_modules/.bin/vitest
+      - run
+      - tests/checkout.unit.test.ts
+      - --reporter=default
+      - --reporter=junit
+      - --outputFile.junit=/app/reports/unit-results.xml

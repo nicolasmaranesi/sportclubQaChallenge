@@ -1,0 +1,33 @@
+timestamps {
+    timeout(time: 40, unit: 'MINUTES') {
+        try {
+            stage('Preparar Web E2E') {
+                sh '''
+                    set -eu
+                    test -f web/docker-compose.yml || test -f web/docker-compose.yaml
+                    mkdir -p web/reports
+                    rm -f web/reports/e2e-results.xml
+                '''
+            }
+            stage('Ejecutar Web E2E — Playwright') {
+                sh '''
+                    set -eu
+                    compose_file=web/docker-compose.yml
+                    [ -f "$compose_file" ] || compose_file=web/docker-compose.yaml
+                    docker compose -p web -f "$compose_file" \
+                        run --rm -T --build web-e2e
+                '''
+            }
+        } finally {
+            stage('Publicar resultados Web E2E') {
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    junit(testResults: 'web/reports/e2e-results.xml', allowEmptyResults: false)
+                }
+                archiveArtifacts(
+                    artifacts: 'web/reports/**,web/playwright-report/**,web/test-results/**',
+                    allowEmptyArchive: true
+                )
+            }
+        }
+    }
+}

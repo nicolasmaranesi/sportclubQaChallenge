@@ -1,0 +1,7 @@
+appId: com.muvinai.carnet2
+flows:
+  - "MOBILE-E2E-*.yaml"
+
+excludeTags:
+  - needs-inspection
+testOutputDir: /work/evidence/maestro/tests

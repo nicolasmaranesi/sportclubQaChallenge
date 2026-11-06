@@ -231,7 +231,6 @@ jobs:
             echo "Ejecución: #${GITHUB_RUN_NUMBER}"
             echo "Repositorio: ${GITHUB_REPOSITORY}"
             echo "Commit: ${GITHUB_SHA}"
-            echo "Resultados y evidencias: ${report_url}"
             echo
             echo 'Resultados individuales:'
           } > ci-artifacts/email-body.txt

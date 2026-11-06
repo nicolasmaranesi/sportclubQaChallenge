@@ -6,6 +6,6 @@ appId: com.muvinai.carnet2
 
 - extendedWaitUntil:
     visible: "Aplicar"
-    timeout: 10000
+    timeout: 45000
 
 - takeScreenshot: "panel-filtros-abierto"

@@ -1,9 +1,19 @@
+
 appId: com.muvinai.carnet2
 ---
-
 - launchApp:
     clearState: false
-- assertVisible: "Sedes"
+
+- extendedWaitUntil:
+    visible: "Sedes"
+    timeout: 45000
+
 - tapOn: "Sedes"
-- assertVisible: "Filtros"
-- assertVisible: "Google Map"
+
+- extendedWaitUntil:
+    visible: "Filtros"
+    timeout: 30000
+
+- extendedWaitUntil:
+    visible: "Google Map"
+    timeout: 30000

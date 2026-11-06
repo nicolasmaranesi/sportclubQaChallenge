@@ -1,207 +1,412 @@
 # SportClub QA Challenge
 
-Proyecto de aseguramiento de calidad que reúne **exploración manual, pruebas unitarias, automatización E2E web y móvil, pruebas funcionales de API y performance controlada**. Cada módulo se organiza de forma independiente y utiliza Docker cuando corresponde. La etapa final será la orquestación de todas las suites mediante **Jenkins**.
+**Proyecto de Quality Assurance y automatización de pruebas** que integra exploración funcional, unit testing, pruebas E2E web y mobile, testing de APIs y una prueba controlada de performance.
 
-> **Alcance y seguridad:** las pruebas web navegan sobre páginas públicas de SportClub y **no finalizan pagos ni contrataciones**. Los tests de API utilizan **DummyJSON**, y la prueba de rendimiento se ejecuta **exclusivamente contra QuickPizza**, con carga pequeña y duración limitada. No se realizan pruebas de carga sobre sistemas productivos de SportClub.
+La solución está organizada en módulos independientes, ejecutados mediante contenedores, con **Jenkins como orquestador central** y **GitHub Actions como punto de entrada de CI**. Se generan resultados JUnit, reportes HTML, métricas, logs y evidencias que permiten investigar fallos y presentar resultados trazables.
 
-## 1. Objetivos
 
-- Diseñar pruebas a partir de requisitos y comportamientos observables, con una selección justificada de escenarios críticos.
-- Distinguir **pruebas exploratorias, unitarias, E2E, de integración/API y de performance**.
-- Mantener suites independientes, reproducibles y ejecutables desde contenedores.
-- Generar evidencias (reportes, logs, capturas, trazas y resultados crudos) para facilitar el análisis de fallos.
-- Centralizar la ejecución y la publicación de resultados en **Jenkins**, sin acoplar CI a un módulo particular.
 
-## 2. Stack tecnológico
+## 1. Estado actual y ejecución de referencia
 
-| Área | Herramientas | Propósito |
+**Estado: integración CI implementada y validada de punta a punta.**
+
+La ejecución integral de GitHub Actions **#8**, realizada el **6 de noviembre de 2026**, finalizó con **SUCCESS en los seis pipelines**.
+
+**[Ver ejecución exitosa en GitHub Actions](https://github.com/nicolasmaranesi/sportclubQaChallenge/actions/runs/42306162256)** · Commit: `2193b78` · Duración total reportada por GitHub Actions: **8 min 31 s**.
+
+| Pipeline Jenkins | Tecnología principal | Resultado de la ejecución #8 |
 | --- | --- | --- |
-| Mobile | Maestro, Android Emulator, ADB, Docker | Flujos móviles y validaciones de interfaz |
-| Web unit | TypeScript, Vitest | Reglas aisladas de una implementación simplificada |
-| Web E2E | TypeScript, Playwright, Chromium, Docker | Flujos públicos de navegación desde la perspectiva del usuario |
-| Backend | Postman Collections, Newman, Newman HTML Extra, Docker | Contratos, autenticación y relación entre endpoints REST |
-| Performance | Apache JMeter 5.6.3, JMX, Docker | Carga moderada y métricas de QuickPizza |
-| CI/CD (siguiente etapa) | Jenkins, Docker Compose | Ejecutar suites, evaluar resultados y archivar evidencias |
+| `01-Backend-API` | Postman / Newman | **SUCCESS** |
+| `02-Web-Unit` | Vitest / TypeScript | **SUCCESS** |
+| `03-Mobile-Unit` | Vitest / TypeScript | **SUCCESS** |
+| `04-Web-E2E` | Playwright / Chromium | **SUCCESS** |
+| `05-Mobile-E2E` | Maestro / Android Emulator | **SUCCESS** |
+| `06-Performance` | Apache JMeter | **SUCCESS** |
 
-## 3. Estado del proyecto
+La exploración manual se documenta por separado y **no constituye un séptimo pipeline automatizado**. Los estados anteriores describen una ejecución concreta: no garantizan que futuras ejecuciones, dependientes de servicios externos, tengan el mismo resultado.
 
-| Módulo | Estado actual | Evidencia de la última validación comunicada |
+## 2. Objetivos y estrategia de pruebas
+
+- **Cobertura basada en riesgos:** seleccionar escenarios representativos y justificar su impacto sobre navegación, registro, selección de productos y consumo de servicios.
+- **Separación de niveles:** diferenciar pruebas exploratorias, unitarias, E2E, APIs y performance.
+- **Reproducibilidad:** aislar dependencias y herramientas mediante Docker.
+- **Trazabilidad:** conservar test cases, configuraciones, reportes, logs y resultados asociados a una ejecución y un commit.
+- **CI centralizada:** evitar que Jenkins dependa del módulo `mobile/`; cada suite mantiene su configuración y su pipeline.
+- **Diagnóstico de fallos:** publicar evidencias aun cuando alguna suite no finalice correctamente.
+
+### Stack tecnológico
+
+| Área | Tecnologías y herramientas | Propósito |
 | --- | --- | --- |
-| Exploración web | Realizada | Escenarios manuales y hallazgo en validación del checkout |
-| Mobile | Suite ejecutada en Docker | Flujo de sedes con Maestro; integración CI pendiente |
-| Web unit | Funcionando | Pruebas de validación del checkout con Vitest |
-| Web E2E | **4/4 PASS** | Playwright en Docker; ejecución completa de 26,9 s |
-| Backend — Auth/Users | **7 requests / 14 assertions PASS** | Newman en Docker; véase observación sobre HTTP 500 |
-| Backend — Products | **14 requests / 28 assertions PASS** | Newman en Docker |
-| Performance — QuickPizza | **24/24 muestras correctas** | Dashboard JMeter, 0 % de errores, p95 global 888 ms |
-| Jenkins | **Pendiente** | Arquitectura y etapas previstas en este README |
+| Exploración web | Navegadores, matriz manual de escenarios | Validar comportamientos observables y registrar defectos |
+| Web Unit | TypeScript, Vitest | Verificar reglas de una implementación simplificada del checkout |
+| Mobile Unit | TypeScript, Vitest | Validar lógica aislada relacionada con sedes |
+| Web E2E | Playwright, Chromium, Page Object Model | Comprobar flujos de navegación del sitio público |
+| Mobile E2E | Maestro, Android Emulator, ADB | Validar navegación como visitante y carga de sedes |
+| API | Postman, Newman, Newman HTML Extra | Autenticación, Users, Products y encadenamiento de respuestas |
+| Performance | Apache JMeter 5.6.3 | Ejecutar carga moderada y registrar métricas de QuickPizza |
+| Orquestación | Jenkins LTS (JDK 21), Job DSL, JCasC | Crear y ejecutar los seis jobs y publicar resultados |
+| Infraestructura | Docker Engine, Docker Compose v2, KVM | Ejecutar herramientas y emulador Android |
+| CI y entrega | GitHub Actions, Git LFS, GitHub Container Registry | Ejecutar bajo demanda, recuperar APK e imagen Android, distribuir evidencias |
+| Notificaciones | Gmail SMTP (opcional) | Enviar resumen y ZIP compacto con resultados |
 
-Los números corresponden a ejecuciones concretas y **no** representan una monitorización permanente ni garantizan que futuras corridas tengan el mismo resultado.
+## 3. Arquitectura implementada
 
-## 4. Organización del repositorio
+```text
+                              GitHub Actions
+                    .github/workflows/full-suite.yml
+                         workflow_dispatch (manual)
+                                  |
+                     Ubuntu 24.04 + Docker + KVM
+                                  |
+                  checkout (Git LFS) + login a GHCR
+                                  |
+                 compose.yaml (raíz del repositorio)
+                                  |
+                    Jenkins en contenedor Docker
+                     puerto local 127.0.0.1:8085
+                                  |
+                  JCasC (casc.yml) + Job DSL
+                        (jobs.groovy)
+                                  |
+                       00-Full-Suite
+                    [ejecución secuencial]
+                                  |
+         +------------------------+-----------------------+
+         |                        |                       |
+    01-Backend-API           02-Web-Unit           03-Mobile-Unit
+    Newman / Docker          Vitest / Docker       Vitest / Docker
+         |                        |                       |
+         +------------------------+-----------------------+
+                                  |
+         +------------------------+-----------------------+
+         |                        |                       |
+      04-Web-E2E            05-Mobile-E2E         06-Performance
+    Playwright / Docker      Maestro / Docker       JMeter / Docker
+                             Android + ADB
+                                  |
+                     JUnit / HTML / JTL / logs
+                                  |
+                     Jenkins: test reports +
+                          artefactos por job
+                                  |
+                  GitHub Actions: resumen final,
+                    sportclub-qa-results (7 días)
+                                  |
+                     Gmail SMTP (si está configurado)
+```
 
-Estructura de referencia basada en los módulos utilizados. Las carpetas de reportes se generan o completan durante la ejecución.
+### Responsabilidades de cada componente
+
+**GitHub Actions** prepara el runner, valida `/dev/kvm`, descarga el repositorio con Git LFS, levanta Jenkins desde la raíz, autentica el acceso a la imagen Android de GHCR, dispara el job `00-Full-Suite` por la API de Jenkins y espera su resultado. Después recupera logs, genera un resumen con el estado de cada pipeline, publica los artefactos y opcionalmente envía un correo.
+
+**Jenkins** se inicia mediante `compose.yaml`, se configura sin pasos manuales mediante **Jenkins Configuration as Code (JCasC)** y crea los jobs con **Job DSL**. El job `00-Full-Suite` llama a los seis jobs en orden, **espera a que termine cada uno**, recopila sus resultados y marca la ejecución integral como fallida si alguna suite falla. Usa `propagate: false` para poder continuar con las suites restantes y presentar un resultado consolidado.
+
+**Docker Compose** mantiene la infraestructura separada: el Compose de la raíz levanta Jenkins y los Compose específicos ejecutan las pruebas de backend, web, mobile y stress. Mobile Unit utiliza una imagen definida en `jenkins/mobile-unit/Dockerfile`.
+
+**Android E2E** utiliza aceleración **KVM**, una imagen base publicada en **GitHub Container Registry (GHCR)**, claves ADB compartidas, instalación de APKs divididos y una ejecución Maestro dentro de Docker. No depende de un teléfono conectado físicamente al runner.
+
+## 4. Estructura del repositorio
+
+Árbol resumido de los archivos relevantes. Los directorios de reportes y evidencias se generan o completan en tiempo de ejecución.
 
 ```text
 sportclubQaChallenge/
+├── .github/
+│   └── workflows/
+│       └── full-suite.yml                 # Punto de entrada en GitHub Actions
 ├── backend/
-│   ├── collections/
-│   │   ├── auth-users.postman_collection.json
-│   │   └── products.postman_collection.json
+│   ├── collections/                      # Auth/Users y Products de Postman
+│   ├── environments/                     # Entorno de ejecución de Newman
 │   ├── docker/
 │   │   └── Dockerfile
-│   ├── environments/
-│   │   └── sportclub.ci.postman_environment.json
-│   ├── reports/
-│   └── docker-compose.yml
-├── jenkins/                         # Integración CI central pendiente
+│   ├── reports/                          # JUnit y reportes HTML (generados)
+│   └── docker-compose.yaml
+├── jenkins/
+│   ├── Dockerfile                        # Jenkins LTS + Docker CLI / Compose
+│   ├── plugin.txt                        # Plugins instalados
+│   ├── casc.yml                          # Configuración declarativa de Jenkins
+│   ├── jobs.groovy                       # 00-Full-Suite y seis jobs por tecnología
+│   ├── mobile-unit/
+│   │   └── Dockerfile
+│   └── pipelines/
+│       ├── backend-api.jenkinsfile
+│       ├── web-unit.jenkinsfile
+│       ├── mobile-unit.jenkinsfile
+│       ├── web-e2e.jenkinsfile
+│       ├── mobile-e2e.jenkinsfile
+│       └── performance.jenkinsfile
 ├── mobile/
+│   ├── apks/sportclub/x86_64/           # base.apk + APK split (Git LFS)
 │   ├── docker/
+│   │   ├── android/                      # Imagen y arranque del emulador
+│   │   └── maestro/                      # Imagen de Maestro y ADB
 │   ├── e2e/
-│   ├── src/
-│   ├── tests/
-│   ├── evidence/
+│   │   ├── common/abrir-sedes.yaml       # Navegación reutilizable
+│   │   ├── sedes-visitante.yaml          # Flujo E2E de visitante
+│   │   └── evidence/jenkins/            # JUnit y evidencias (generados)
+│   ├── scripts/android-setup.sh         # Espera de Android e instalación de APKs
+│   ├── src/                              # Lógica aislada para unit testing
+│   ├── tests/sedes.unit.test.ts
+│   ├── reports/                          # JUnit Mobile Unit (generado)
 │   └── docker-compose.yml
 ├── stress/
-│   ├── docker/
-│   │   └── Dockerfile
-│   ├── plans/
-│   │   └── quickpizza.jmx
-│   ├── reports/
+│   ├── docker/Dockerfile
+│   ├── plans/quickpizza.jmx
+│   ├── reports/                          # JTL, logs y dashboard (generados)
 │   └── docker-compose.yaml
 ├── web/
-│   ├── docker/
-│   │   └── Dockerfile
-│   ├── e2e/
-│   │   └── checkout.e2e.spec.ts
-│   ├── src/
-│   │   ├── checkout.ts
-│   │   └── pages/
-│   │       ├── sportclub-landing.page.ts
-│   │       └── sportclub-checkout.page.ts
-│   ├── tests/
-│   │   └── checkout.unit.test.ts
+│   ├── docker/                           # Imágenes Web Unit y Web E2E
+│   ├── e2e/                              # Tests Playwright
+│   ├── src/                              # Modelo de checkout y Page Objects
+│   ├── tests/checkout.unit.test.ts
 │   ├── playwright.config.ts
 │   ├── vitest.config.ts
-│   ├── docker-compose.yml
-│   ├── playwright-report/           # Generado
-│   ├── test-results/                # Generado
-│   └── reports/                     # Generado
-├── compose.yaml                     # Orquestación raíz, a integrar con Jenkins
+│   ├── reports/                          # XML JUnit (generados)
+│   ├── playwright-report/                # HTML Playwright (generado)
+│   ├── test-results/                     # Traces/capturas/videos (generados)
+│   └── docker-compose.yaml
+├── .env.example                          # Variables para Jenkins local
+├── .gitattributes                        # Seguimiento Git LFS de los APKs
+├── compose.yaml                          # Jenkins central en la raíz
 ├── package.json
-└── README.md
+├── package-lock.json
+└── readme.md
 ```
 
-**Criterio de diseño:** Jenkins vive en la raíz o en `jenkins/`, separado de `mobile/`, y ejecutará los Compose de `mobile/`, `web/`, `backend/` y `stress/`. Cada módulo conserva sus dependencias y resultados.
+> **Nota:** el Compose central **no** reemplaza los Compose de las suites. Jenkins está fuera de `mobile/` y orquesta cada módulo desde la raíz del repositorio.
 
-## 5. Requisitos y convenciones
+## 5. Requisitos
 
-- Docker Engine y el complemento **Docker Compose v2** (`docker compose`).
-- Acceso a Internet para las pruebas que consultan servicios públicos y para descargar imágenes.
-- Node.js/npm para ejecutar Vitest localmente; las suites Docker incluyen las dependencias necesarias en sus imágenes.
-- Para Mobile: emulador Android operativo, conectividad ADB y autorizaciones correspondientes.
-- Linux: usar `PUID=$(id -u)` y `PGID=$(id -g)` en los servicios que mapean el usuario local; garantizar escritura en las carpetas `reports/` y evidencias.
-- Ejecutar los comandos desde la **raíz del repositorio**, salvo que se indique lo contrario. Las rutas de Docker Compose se resuelven respecto de la ubicación del archivo Compose.
+### Para ejecutar GitHub Actions
 
-**Validación de servicios disponibles:**
+- Repositorio accesible desde GitHub Actions y permiso para ejecutar el workflow manualmente.
+- Runner `ubuntu-24.04` con Docker y dispositivo **`/dev/kvm`** disponible.
+- Archivos APK accesibles mediante Git LFS y permisos para descargar la imagen Android `ghcr.io/nicolasmaranesi/sportclub-android-playstore:13`.
+- Permisos de workflow `contents: read` y `packages: read` para checkout y GHCR.
+- Opcional: secretos `MAIL_USERNAME` y `MAIL_PASSWORD` si se desea recibir el resumen por Gmail.
+
+### Para ejecutar localmente en Linux
+
+- Docker Engine y Docker Compose v2 (`docker compose`).
+- Git y **Git LFS** (`git lfs`) para recuperar los APKs completos.
+- Conectividad para descargar imágenes y consultar SportClub, DummyJSON y QuickPizza.
+- Para **Mobile E2E**, `/dev/kvm` habilitado y disponible para Docker; ADB funciona dentro de los contenedores.
+- Permisos de escritura en los directorios `reports/`, `playwright-report/`, `test-results/` y `evidence/`.
+
+Comprobaciones útiles desde la raíz:
 
 ```bash
-docker compose -f mobile/docker-compose.yml config --services
-docker compose -f web/docker-compose.yml config --services
-docker compose -f backend/docker-compose.yml config --services
-docker compose -f stress/docker-compose.yaml config --services
+docker version
+docker compose version
+git lfs version
+git lfs pull
+ls -lh mobile/apks/sportclub/x86_64/
+ls -l /dev/kvm  # Necesario para Mobile E2E
 ```
 
-## 6. Exploración manual — SportClub web
+> Ejecutar todos los comandos desde la **raíz del repositorio**, salvo que se indique lo contrario. En Linux, `PUID` y `PGID` permiten que los reportes montados en el host conserven permisos compatibles con el usuario local.
 
-La exploración abarca carga de la landing, navegación hacia planes, cambio entre planes mensuales y anuales, inicio del checkout y revisión de formularios. La prioridad se asigna según el impacto en navegación, selección de producto y contratación.
+## 6. Ejecución integral en GitHub Actions
 
-Escenarios de referencia:
+El workflow se encuentra en [`.github/workflows/full-suite.yml`](.github/workflows/full-suite.yml). Actualmente utiliza **`workflow_dispatch`**, es decir, **se ejecuta manualmente**, no en cada `push`.
 
-| ID | Cobertura |
+1. Abrir **[Actions → SportClub QA - Full Suite](https://github.com/nicolasmaranesi/sportclubQaChallenge/actions/workflows/full-suite.yml)**.
+2. Seleccionar **Run workflow** y elegir la rama `main`.
+3. Esperar el resultado del job `Jenkins + Docker + Android KVM`.
+4. Revisar la tabla de las seis suites en el **Summary** de la ejecución.
+5. Descargar el artefacto **`sportclub-qa-results`** desde la sección **Artifacts** del resumen.
+
+El workflow ejecuta estas actividades:
+
+1. **Checkout con LFS:** `actions/checkout@v4` y `lfs: true` para recuperar los APKs completos.
+2. **Preparación del runner:** comprueba Docker, disco y memoria, habilita el acceso a `/dev/kvm` y crea carpetas de reportes.
+3. **Arranque de Jenkins:** `docker compose up -d --build jenkins`, con una contraseña temporal de administrador generada para la ejecución de CI.
+4. **Disponibilidad y GHCR:** espera el job `00-Full-Suite` y autentica a Jenkins para descargar la imagen de Android.
+5. **Orquestación:** lanza `SportClub-Tests/00-Full-Suite` desde la API de Jenkins y consulta su finalización.
+6. **Diagnósticos:** recupera las consolas de Jenkins y los logs de contenedores y recursos, incluso si alguna suite falla (`if: always()`).
+7. **Publicación:** escribe un resumen por pipeline, arma `sportclub-qa-report.zip` y sube `sportclub-qa-results` con una **retención configurada de siete días**.
+8. **Correo opcional:** si existen los secretos SMTP, envía un correo con estado final y un ZIP compacto. Los archivos grandes permanecen en los artefactos de GitHub Actions.
+
+La ejecución integral usa un timeout máximo de **210 minutos** a nivel de GitHub Actions; `00-Full-Suite` también tiene un timeout propio de **180 minutos**.
+
+### Estados y comportamiento ante fallos
+
+Los seis jobs se ejecutan **secuencialmente**. Si uno falla, `00-Full-Suite` registra ese resultado y continúa con los demás; al finalizar, consolida los fallos y entrega `FAILURE` cuando corresponda. Jenkins publica sus resultados desde bloques `finally` cuando el pipeline correspondiente los produce, y GitHub Actions intenta recopilar los logs y artefactos independientemente del estado del test.
+
+La publicación de artefactos no significa que todas las pruebas hayan aprobado: **el estado de cada pipeline debe leerse por separado**.
+
+## 7. Ejecución de Jenkins local
+
+El archivo [`.env.example`](.env.example) define las variables necesarias para levantar el servicio local. No utiliza la contraseña temporal que genera GitHub Actions: esa configuración es específica del runner.
+
+```bash
+# Ejecutar desde la raíz
+cp .env.example .env
+
+# Editar .env y cambiar JENKINS_ADMIN_PASSWORD por una contraseña local segura.
+# Opcional: ajustar PUID y PGID si no son 1000.
+export PROJECT_ROOT="$(pwd)"
+export PUID="$(id -u)"
+export PGID="$(id -g)"
+
+docker compose up -d --build jenkins
+docker compose ps
+```
+
+Abrir **http://127.0.0.1:8085**. El usuario es `admin` y la contraseña es el valor definido en `.env`.
+
+Jenkins carga `jenkins/casc.yml` y `jenkins/jobs.groovy` al iniciarse. Dentro de **SportClub-Tests** estarán disponibles el job `00-Full-Suite` y las seis suites individuales. Para la corrida completa, seleccionar **`00-Full-Suite` → Build Now**.
+
+Para detener únicamente el Jenkins central:
+
+```bash
+docker compose down
+```
+
+Este comando no borra el volumen persistente `jenkins_home`; **no** usar `docker compose down -v` si se desea conservarlo. Los contenedores de los módulos utilizan proyectos Compose separados.
+
+**Consideración de seguridad:** el Jenkins local se ejecuta con usuario `root` dentro del contenedor y monta el socket Docker del host (`/var/run/docker.sock`), por lo que tiene privilegios elevados sobre Docker. Su puerto está publicado únicamente en `127.0.0.1:8085`. Está pensado para un entorno de desarrollo/controlado; no debe exponerse a Internet sin rediseñar su seguridad.
+
+## 8. Suites y ejecución individual
+
+Las suites son independientes y pueden ejecutarse sin correr `00-Full-Suite`. Para las pruebas contenedorizadas con salida a carpetas compartidas, se recomienda establecer el usuario local:
+
+```bash
+export PUID="$(id -u)"
+export PGID="$(id -g)"
+```
+
+### 8.1. Exploración manual — SportClub web
+
+La exploración cubre carga de la landing, navegación a planes, cambio entre modalidades mensual/anual, inicio de checkout, comportamiento responsive y validación de campos.
+
+| ID | Escenario de referencia |
 | --- | --- |
-| WEB-MANUAL-1 | Carga y navegación de la landing |
-| WEB-MANUAL-2 | Acceso a la sección de planes desde «Asociate» |
-| WEB-MANUAL-3 | Cambio entre planes mensuales y anuales |
-| WEB-MANUAL-4 | Inicio de contratación del plan seleccionado |
-| WEB-MANUAL-5 | Continuidad del checkout conforme al recorrido observado |
-| WEB-MANUAL-6 | Validación de campos obligatorios en checkout |
+| `WEB-MANUAL-01` | Carga y navegación de la landing |
+| `WEB-MANUAL-02` | Acceso a planes desde «Asociate» |
+| `WEB-MANUAL-03` | Cambio entre planes mensuales y anuales |
+| `WEB-MANUAL-04` | Inicio de la contratación del plan seleccionado |
+| `WEB-MANUAL-05` | Continuidad hasta el checkout, sin finalizar la compra |
+| `WEB-MANUAL-06` | Validación de campos obligatorios del formulario |
 
-**Hallazgo exploratorio:** en el escenario de formulario vacío se observó que el campo número de tarjeta no se resaltaba como obligatorio del mismo modo que otros campos. Esta observación es una **evidencia manual**, no una afirmación sobre el código fuente real. No se realizó un pago.
+**Hallazgo exploratorio documentado:** ante un formulario vacío, el campo de número de tarjeta no se resaltó como obligatorio del mismo modo que otros campos. Se trata de una observación manual sobre la interfaz, no de una afirmación sobre el código fuente del sistema. La matriz manual y los defectos se mantienen separados de la ejecución CI.
 
-La matriz de exploración puede conservarse en Google Sheets u otro registro separado con resultado esperado/obtenido, prioridad y evidencias.
+### 8.2. Web Unit — Vitest
 
-## 7. Unit Testing — implementación simplificada
-
-**Sección elegida:** validación del formulario de checkout. La consigna permite modelar reglas propias porque no se dispone del código real de SportClub.
-
-La implementación en `web/src/checkout.ts` modela la obligatoriedad y formatos de los campos definidos para el ejercicio. Los tests en `web/tests/checkout.unit.test.ts` verifican entradas válidas e inválidas, campos vacíos, formatos incorrectos y bloqueo del avance.
-
-> Los tests unitarios verifican el **modelo simplificado**, no el código de producción de SportClub. La visualización de mensajes y resaltados se valida por separado mediante pruebas de interfaz.
-
-**Ejecutar desde la raíz:**
+**Objetivo:** validar de forma aislada las reglas de un checkout simplificado, implementadas en `web/src/checkout.ts` y verificadas en `web/tests/checkout.unit.test.ts`. Incluye casos válidos e inválidos, campos vacíos, formato de datos y bloqueo del avance.
 
 ```bash
-cd web
-npx vitest run --config vitest.config.ts
-cd ..
+docker compose -p web -f web/docker-compose.yaml \
+  run --rm -T --build web-unit
 ```
 
-Si está configurado el script correspondiente en `web/package.json`, también puede ejecutarse `npm run test:unit`.
+**JUnit:** `web/reports/unit-results.xml`.
 
-## 8. E2E web — Playwright
+> Esta implementación es un **modelo de prueba propio**, no el código productivo de SportClub. Su resultado no demuestra por sí solo el funcionamiento interno del sitio real.
 
-**Flujo principal:** `landing → Asociate → modalidad mensual → Plan Total → checkout, paso 2`.
+### 8.3. Mobile Unit — Vitest
 
-**Rutas utilizadas:**
+**Objetivo:** verificar lógica aislada relacionada con sedes, sin iniciar un emulador. Las pruebas están en `mobile/tests/sedes.unit.test.ts`.
 
-- Landing: `https://www.sportclub.com.ar/`
-- Checkout observado en la ejecución: `https://checkout.sportclub.com.ar/paso2/promocion-plan-total-mensual-ecommerce`
+El job Jenkins construye una imagen Node desde `jenkins/mobile-unit/Dockerfile` y ejecuta Vitest:
 
-La selección de elementos utiliza Page Objects y localizadores orientados a la interfaz (roles, nombres accesibles y contexto de la tarjeta), evitando depender exclusivamente de rutas `href` que pueden cambiar.
+```bash
+mkdir -p mobile/reports
+
+docker build -t sportclub/mobile-unit:local \
+  -f jenkins/mobile-unit/Dockerfile .
+
+docker run --rm \
+  --mount "type=bind,source=$(pwd)/mobile/reports,target=/workspace/mobile/reports" \
+  sportclub/mobile-unit:local
+```
+
+**JUnit:** `mobile/reports/unit-results.xml`.
+
+### 8.4. Web E2E — Playwright
+
+**Target:** `https://www.sportclub.com.ar/`.
+
+**Flujo principal:** `Landing → Asociate → modalidad mensual → Plan Total → checkout (paso 2)`. La suite usa Page Object Model, localizadores de interfaz y el proyecto Chromium; no concreta compras.
 
 | ID | Escenario |
 | --- | --- |
-| WEB-E2E-01 | Landing → Asociate → Total Mensual → checkout paso 2 |
-| WEB-E2E-02 | Cambiar Mensual → Anual → Mensual |
-| WEB-E2E-03 | Verificar catálogo mensual Plus, Flex y Total |
-| WEB-E2E-04 | Verificar disponibilidad del flujo en resolución móvil |
-
-**Ejecutar desde la raíz:**
+| `WEB-E2E-01` | Landing → Asociate → Total mensual → checkout |
+| `WEB-E2E-02` | Cambiar mensual → anual → mensual |
+| `WEB-E2E-03` | Verificar planes mensuales Plus, Flex y Total |
+| `WEB-E2E-04` | Verificar el flujo bajo una resolución móvil |
 
 ```bash
-PUID=$(id -u) PGID=$(id -g) \
-docker compose -f web/docker-compose.yml run --rm --build web-e2e
+docker compose -p web -f web/docker-compose.yaml \
+  run --rm -T --build web-e2e
 ```
 
-**Evidencias:**
+**Evidencias:** `web/reports/e2e-results.xml`, `web/playwright-report/` y `web/test-results/`. La configuración conserva capturas y videos ante fallos y trazas según `PW_TRACE`.
 
-- `web/playwright-report/index.html`: reporte HTML.
-- `web/reports/e2e-results.xml`: resultados JUnit.
-- `web/test-results/artifacts/`: capturas, videos y trazas según la configuración del test.
+### 8.5. Mobile E2E — Maestro + Android
 
-El E2E se detiene **antes de ingresar datos para concretar pagos o contrataciones**.
+**Target:** aplicación SportClub, paquete `com.muvinai.carnet2`, instalada desde los APKs de `mobile/apks/sportclub/x86_64/`.
 
-## 9. Backend — Postman y Newman sobre DummyJSON
+El Compose de Mobile gestiona cuatro servicios:
 
-**Target:** `https://dummyjson.com` (API de demostración, no sistemas de SportClub).
+| Servicio | Función |
+| --- | --- |
+| `adb-keygen` | Genera o reutiliza las claves ADB compartidas |
+| `android-emulator` | Arranca Android con KVM e imagen base de GHCR; expone ADB por la red Docker |
+| `android-setup` | Espera el arranque, instala los APKs con `adb install-multiple` y verifica el paquete |
+| `maestro` | Se conecta al emulador y ejecuta los flows YAML |
 
-### Bloque A — Auth / Users
+El caso `mobile/e2e/sedes-visitante.yaml` navega como visitante hasta **Sedes** y valida que se muestren **`Google Map`** y **`Filtros`**. En una instalación limpia, el recorrido inicial debe contemplar el **onboarding** y **«Ingreso sin registro»** antes de intentar abrir Sedes.
 
-Incluye siete requests para token inválido, login correcto, perfil autenticado, cruce Auth/Users, renovación de token, perfil con token renovado y login con contraseña incorrecta. Se validan códigos HTTP, estructura JSON, tokens y consistencia entre operaciones.
+Los APKs están gestionados mediante **Git LFS**; el checkout de GitHub Actions usa `lfs: true`. La imagen Android se basa en `ghcr.io/nicolasmaranesi/sportclub-android-playstore:13` y requiere acceso a ese paquete.
 
-### Bloque B — Products
+```bash
+# En Linux, comprobar KVM y recuperar APKs antes de ejecutar
+ls -l /dev/kvm
+git lfs pull
 
-Incluye catorce requests para listado, detalle relacionado, paginación, búsqueda, ordenamiento, filtros, alta simulada, lectura posterior, PATCH simulado, lectura posterior al PATCH, DELETE simulado, lectura posterior al DELETE, producto inexistente y búsqueda vacía.
+# Construir imágenes y levantar la cadena de dependencias
+# (adb-keygen → android-emulator → android-setup → maestro)
+docker compose -p mobile -f mobile/docker-compose.yml \
+  build maestro android-emulator
 
-**Ejecutar desde la raíz:**
+docker compose -p mobile -f mobile/docker-compose.yml \
+  up -d --no-build maestro
+
+# Ejecutar el flujo y generar JUnit
+docker compose -p mobile -f mobile/docker-compose.yml \
+  exec -T maestro \
+  maestro --device android-emulator:5555 \
+  test --format junit \
+  --output /work/e2e/evidence/jenkins/maestro-junit.xml \
+  /work/e2e/sedes-visitante.yaml
+```
+
+**JUnit y evidencias:** `mobile/e2e/evidence/jenkins/`. Para diagnosticar errores de arranque se conservan los logs de `android-setup`, emulador, Maestro y ADB en `ci-artifacts/` cuando la suite corre por GitHub Actions.
+
+Para revisar los contenedores:
+
+```bash
+docker compose -p mobile -f mobile/docker-compose.yml ps -a
+docker compose -p mobile -f mobile/docker-compose.yml logs android-setup
+```
+
+### 8.6. Backend API — Postman + Newman
+
+**Target:** `https://dummyjson.com`, API pública de demostración **independiente de SportClub**.
+
+**Bloque A — Auth / Users:** login, token, consulta del usuario autenticado, cruce entre recursos, refresh y escenarios negativos.
+
+**Bloque B — Products:** listado, detalle, búsqueda, paginación, ordenamiento, filtros y operaciones simuladas de alta, modificación y baja.
 
 ```bash
 BASE_URL=https://dummyjson.com \
-docker compose -f backend/docker-compose.yml run --rm --build api-tests
+  docker compose -p backend -f backend/docker-compose.yaml \
+  run --rm -T --build api-tests
 ```
 
-El contenedor ejecuta ambas colecciones secuencialmente y guarda reportes independientes:
+Se generan reportes por colección:
 
 ```text
 backend/reports/
@@ -211,167 +416,90 @@ backend/reports/
 └── products-report.html
 ```
 
-**Observación relevante — API-AUTH-01:** en la ejecución observada `GET /auth/me` con un Bearer inválido respondió **HTTP 500**, en lugar del rechazo de autenticación que normalmente se esperaría (401). La colección se ajustó para verificar el comportamiento **observado**, por eso el último reporte aparece en verde. **Eso no equivale a declarar correcto el comportamiento del servicio**: debe registrarse como hallazgo conocido y distinguirse de un resultado funcional conforme a la expectativa ideal.
+**Hallazgo conocido:** en una ejecución explorada, `GET /auth/me` con Bearer inválido devolvió **HTTP 500** en lugar del rechazo esperable de autenticación (habitualmente 401). La colección fue alineada con el comportamiento observado para registrar el resultado de la API, **pero un test verde no convierte ese comportamiento en correcto**. Debe mantenerse identificado como hallazgo de calidad.
 
-Las operaciones de alta, modificación y eliminación de Products son **simuladas por DummyJSON**; no se interpretan como escrituras persistentes reales.
+Las operaciones de escritura de Products son **simuladas por DummyJSON**: no implican persistencia real de esos cambios.
 
-## 10. Performance — JMeter sobre QuickPizza
+### 8.7. Performance — JMeter sobre QuickPizza
 
-**Target:** `https://quickpizza.grafana.com`, entorno público compartido de demostración. **No** se ejecuta carga sobre SportClub.
-
-### Modelo de carga
+**Target:** `https://quickpizza.grafana.com`. No se ejecuta carga sobre SportClub.
 
 | Parámetro | Configuración |
 | --- | --- |
-| Tipo | Prueba controlada de carga moderada |
+| Tipo | Carga moderada y controlada |
 | Usuarios virtuales | 2 |
 | Ramp-up | 10 s |
 | Duración | 30 s |
-| Think time | 2.000 ms por request |
-| Requests | `GET /api/doughs` y `POST /api/pizza` |
-| Ejecución | Secuencial por usuario, sin buscar saturación |
-
-Los samplers incorporan assertions de código HTTP y contenido esperado. El JMX se guarda en `stress/plans/quickpizza.jmx` y el **View Results Tree está deshabilitado** para la corrida no gráfica.
-
-**Ejecutar desde la raíz:**
+| Think time | 2.000 ms |
+| Endpoints | `GET /api/doughs` y `POST /api/pizza` |
+| Ejecución | Requests secuenciales por usuario, sin buscar saturación |
 
 ```bash
-PUID=$(id -u) PGID=$(id -g) \
-docker compose -f stress/docker-compose.yaml run --rm --build jmeter
+docker compose -p stress -f stress/docker-compose.yaml \
+  run --rm -T --build jmeter
 ```
 
-Cada ejecución crea un directorio en `stress/reports/run-<fecha>-<id>/` con `results.jtl`, `jmeter.log` y `dashboard/index.html`.
-
-### Criterios definidos para este ejercicio
-
-- **p95 global ≤ 2.000 ms**.
-- **Tasa de éxito ≥ 95 %**.
-- **Al menos seis muestras** para poder hacer una revisión básica de resultados.
-- Revisar errores HTTP, promedios, máximos, throughput y APDEX. Los límites anteriores son **criterios del ejercicio, no SLA oficiales**.
-
-### Resultado registrado — ejecución del 6 de noviembre de 2026
-
-| Métrica | Resultado |
-| --- | ---: |
-| Muestras totales | 24 |
-| Errores | 0 (0 %) |
-| Promedio global | 256,88 ms |
-| p95 global | 888 ms |
-| Máximo observado | 1.005 ms |
-| Throughput global | 0,87 requests/s |
-| APDEX global | 0,958 |
-| GET `/api/doughs` | 13 muestras, p95 1.005 ms |
-| POST `/api/pizza` | 11 muestras, p95 344 ms |
-
-**Conclusión:** bajo esta carga breve y controlada, los resultados cumplieron los criterios establecidos. La muestra no permite estimar capacidad máxima, comportamiento a gran escala ni resistencia ante una prueba de estrés. El dashboard y el JTL son la evidencia de esta ejecución.
-
-## 11. Jenkins — diseño de la integración central (pendiente)
-
-> **Estado real:** al momento de redactar este README, las suites se han ejecutado **por separado**. La configuración completa y la primera corrida integral en Jenkins **aún no fueron implementadas**. La siguiente sección documenta la arquitectura y los requisitos de esa etapa.
-
-### Arquitectura objetivo
+El plan está en `stress/plans/quickpizza.jmx` y corre en modo no gráfico. Cada ejecución guarda resultados en una carpeta identificada por fecha e ID:
 
 ```text
-                      Jenkins (CI central)
-                              |
-          +-------------------+-------------------+
-          |                   |                   |
-       Mobile                Web                Backend
-   Maestro + Docker     Vitest / Playwright    Newman + Docker
-          |                   |                   |
-          +-------------------+-------------------+
-                              |
-                    Stress (controlado)
-                      JMeter + Docker
-                              |
-                  Reportes y evidencias
-          JUnit / HTML / JTL / logs / capturas
+stress/reports/run-<fecha>-<id>/
+├── results.jtl
+├── jmeter.log
+└── dashboard/
+    └── index.html
 ```
 
-**Ubicación:** Jenkins se configurará fuera de `mobile/`, preferentemente con un directorio `jenkins/` para imagen/configuración y un `Jenkinsfile` en la raíz. El `compose.yaml` raíz podrá arrancar Jenkins y los servicios de infraestructura necesarios, mientras que cada suite seguirá usando su Compose propio.
+**Criterios de análisis definidos para el challenge** (no son SLA oficiales de QuickPizza): **p95 global ≤ 2.000 ms**, **tasa de éxito ≥ 95 %** y **al menos seis muestras** para un análisis básico. También se revisan throughput, promedio, máximos, errores y APDEX.
 
-### Etapas propuestas del pipeline
+**Referencia histórica — ejecución individual del 6/11/2026:** 24 muestras, 0 % de errores, promedio 256,88 ms, p95 global 888 ms, máximo 1.005 ms, throughput 0,87 req/s y APDEX 0,958. Estos valores pertenecen a aquella ejecución de referencia y **no deben atribuirse automáticamente a la corrida integral #8**.
 
-| Etapa | Acción prevista | Criterio para la integración |
+> **Limitación del quality gate:** el pipeline actualmente ejecuta JMeter y archiva sus resultados. Los umbrales de p95 y tasa de éxito están documentados como criterios de evaluación; no se debe dar por implementado un gate automático sobre el JTL mientras no exista un paso que los calcule y falle expresamente el job si no se cumplen. El código de salida de JMeter por sí solo no reemplaza ese análisis.
+
+## 9. Reportes, evidencias y trazabilidad
+
+Jenkins publica resultados JUnit y archiva los archivos generados por sus jobs. GitHub Actions los reúne en un artefacto accesible desde el resumen de la ejecución.
+
+| Suite / etapa | Evidencia principal | Ubicación en el repositorio o runner |
 | --- | --- | --- |
-| Checkout | Obtener el código del repositorio | Commit y rama identificables |
-| Validaciones previas | Verificar Docker, Compose, archivos y configuración | Fallar ante configuraciones incompletas |
-| Web Unit | Ejecutar Vitest | Falla si cualquier test unitario falla |
-| Mobile Unit / E2E | Preparar emulador, ADB y ejecutar Maestro; incorporar unit según runner final | Emulador disponible, reportes y logs conservados |
-| Web E2E | Ejecutar `web-e2e` con Playwright | Código de salida y JUnit; adjuntar traces ante fallos |
-| Backend API | Ejecutar `api-tests` con Newman | Ambas colecciones deben ejecutarse; publicar dos XML JUnit |
-| Performance (opcional/controlada) | Ejecutar JMeter contra QuickPizza | Carga pequeña y disparo deliberado, no en cada push |
-| Publicación | Reunir JUnit y archivar artefactos | Reportes accesibles por build, aun cuando haya fallos |
-| Limpieza | Detener servicios temporales | Sin contenedores huérfanos |
+| Backend API | JUnit XML y HTML Newman | `backend/reports/` |
+| Web Unit | JUnit XML | `web/reports/unit-results.xml` |
+| Mobile Unit | JUnit XML | `mobile/reports/unit-results.xml` |
+| Web E2E | JUnit, reporte HTML, screenshots/videos/traces cuando correspondan | `web/reports/`, `web/playwright-report/`, `web/test-results/` |
+| Mobile E2E | JUnit Maestro y evidencias del flujo | `mobile/e2e/evidence/` |
+| Performance | JTL, log y dashboard HTML | `stress/reports/run-*/` |
+| Infraestructura CI | Consolas de los siete jobs, estado de contenedores y logs de Android | `ci-artifacts/` |
+| Resumen de entrega | Estado general, estado por suite y ZIP compacto | Summary de GitHub Actions y `sportclub-qa-report.zip` |
 
-**Comandos base que Jenkins ejecutará desde la raíz:**
+**Artefacto de GitHub Actions:** `sportclub-qa-results`, con retención de **7 días** según el workflow. Contiene las carpetas de resultados disponibles, logs de CI y el ZIP compacto para correo. La presencia de un archivo depende de que el proceso correspondiente haya logrado generarlo.
 
-```bash
-# Web E2E
-PUID=$(id -u) PGID=$(id -g) docker compose -f web/docker-compose.yml run --rm --build web-e2e
+**Notificación por correo:** solo se activa si están configurados `MAIL_USERNAME` y `MAIL_PASSWORD` en **GitHub Actions Secrets**. El correo incluye resumen de los seis jobs y, cuando corresponde, un ZIP con XML/HTML pequeños. Videos y capturas voluminosas se consultan desde el artefacto de Actions.
 
-# Backend API
-BASE_URL=https://dummyjson.com docker compose -f backend/docker-compose.yml run --rm --build api-tests
+Para una entrega técnica reproducible, conviene conservar el vínculo a la ejecución, el SHA del commit, el resultado por job y los reportes originales. La matriz manual de escenarios y el bug tracking son entregables complementarios.
 
-# JMeter: solo al habilitar expresamente la etapa de performance
-PUID=$(id -u) PGID=$(id -g) docker compose -f stress/docker-compose.yaml run --rm --build jmeter
-```
+## 10. Decisiones técnicas, riesgos y límites
 
-Para **Web Unit**, inicialmente se usará Vitest; antes de cerrar CI se decidirá si se ejecuta con Node en el agente o mediante un contenedor dedicado. Para **Mobile**, el pipeline tendrá que garantizar primero el inicio y disponibilidad del emulador y del acceso ADB; la suite no debe lanzarse antes de esa comprobación.
+- **Orquestador desacoplado:** Jenkins está en `jenkins/` y se levanta desde `compose.yaml` en la raíz; `mobile/` no controla las demás pruebas.
+- **Ejecución controlada:** el workflow actual solo acepta disparos manuales (`workflow_dispatch`). La prueba sobre QuickPizza forma parte de la suite completa, por lo que no se dispara automáticamente en cada commit.
+- **Servicios externos:** cambios de UI, disponibilidad, latencia, geolocalización o comportamiento de SportClub, DummyJSON y QuickPizza pueden afectar las suites sin cambios en el repositorio.
+- **Instalación Mobile:** emulador nuevo implica datos limpios; los pasos de onboarding e ingreso sin registro deben considerarse parte de la precondición E2E.
+- **Aceleración Android:** el runner Mobile E2E necesita KVM y la imagen base de GHCR; no es una suite portable a cualquier runner sin estos requisitos.
+- **Recursos de CI:** Jenkins, Docker y el emulador comparten CPU, RAM y espacio de disco del runner.
+- **Seguridad:** no versionar `.env`, secretos SMTP, tokens o credenciales. El socket Docker del host supone privilegios elevados. Respetar los permisos y condiciones de redistribución de APKs de terceros.
+- **Resultados funcionales:** diferenciar el estado técnico de una aserción de la conformidad del producto. El ejemplo del HTTP 500 de DummyJSON es un hallazgo aunque el test lo registre sin fallar.
+- **Performance:** dos usuarios durante 30 segundos permiten una evaluación limitada, pero **no** caracterizan capacidad máxima, estrés, resistencia ni SLA.
+- **Limpieza:** evitar publicar `node_modules/`, cachés y volúmenes como artefactos; archivar solo logs y evidencias necesarias.
 
-### Reportes que deberá publicar Jenkins
+## 11. Mejoras futuras identificadas
 
-| Tipo | Ruta de referencia |
-| --- | --- |
-| JUnit Web E2E | `web/reports/e2e-results.xml` |
-| HTML Playwright | `web/playwright-report/` |
-| Evidencias Playwright | `web/test-results/` |
-| JUnit Backend | `backend/reports/*-results.xml` |
-| HTML Newman | `backend/reports/*-report.html` |
-| JMeter JTL, log y dashboard | `stress/reports/run-*/` |
-| Mobile | `mobile/evidence/` y reportes que se configuren en su runner |
+La **integración de las seis suites ya está terminada y validada**. Las siguientes mejoras no bloquean la ejecución actual:
 
-**Pendientes técnicos específicos antes de declarar CI finalizada:**
-
-1. Implementar el `Jenkinsfile` y el despliegue de Jenkins mediante Docker.
-2. Definir permisos de Docker para el agente Jenkins y propiedad de volúmenes. Montar `/var/run/docker.sock`, si se opta por ello, implica privilegios elevados y debe protegerse.
-3. Configurar disponibilidad del emulador/ADB y las pruebas unitarias del módulo Mobile dentro del pipeline.
-4. Publicar resultados JUnit con Jenkins y conservar evidencias como artefactos del build.
-5. Añadir un **quality gate de performance** que analice el JTL: JMeter puede finalizar con código 0 aunque existan samples fallidos, por lo que no alcanza con su exit code.
-6. Proteger las variables y secretos mediante Jenkins Credentials; no persistir tokens ni contraseñas en Git o reportes públicos.
-7. Ejecutar una corrida integral y verificar que un fallo real de cualquiera de las etapas se refleje correctamente en Jenkins.
-
-Por respeto al entorno público compartido, la etapa de QuickPizza debe ejecutarse **de manera manual o con una frecuencia limitada**, nunca automáticamente en cada commit.
-
-## 12. Evidencias y reproducibilidad
-
-Cada entrega debe incluir el código o plan que produjo el resultado, la versión del entorno, una ejecución identificable y el reporte correspondiente. Se recomienda registrar fecha, commit, parámetros de carga, versión de herramientas y observaciones cuando una prueba falle.
-
-- **Web:** HTML de Playwright, JUnit, screenshots/traces/videos según el resultado.
-- **Backend:** HTML y XML por colección. Evitar compartir reportes con datos sensibles.
-- **Stress:** JMX, JTL, dashboard y análisis breve de métricas por ejecución.
-- **Mobile:** flows Maestro, logs y capturas/evidencias generadas.
-- **Manual:** matriz de escenarios, resultados esperado/obtenido y hallazgos.
-
-Los resultados históricos son evidencia puntual: no deben reemplazarse por estadísticas inventadas ni interpretarse como un SLA del servicio externo.
-
-## 13. Buenas prácticas y límites
-
-- **No completar operaciones reales de pago o contratación** en el sitio de SportClub.
-- **No ejecutar pruebas de performance contra SportClub productivo.** Solo QuickPizza y siempre con carga acotada.
-- No aumentar VUs ni duración sin revisar el impacto sobre el entorno compartido.
-- No subir archivos de secretos, credenciales, tokens o reportes sensibles al repositorio.
-- Excluir de Git `node_modules/`, reportes generados, trazas y artefactos grandes, conservándolos en Jenkins como artefactos por build cuando corresponda.
-- Separar el resultado de una **assertion técnica** de la conclusión de calidad: un test puede pasar porque captura un comportamiento inesperado conocido, como el HTTP 500 de DummyJSON.
-- Priorizar selectores semánticos y Page Object Model en UI; validar contratos y encadenamiento de datos en API; interpretar métricas y tamaño de muestra en performance.
-
-## 14. Próximos pasos
-
-1. Preparar Jenkins en `jenkins/` y el Compose central de la raíz.
-2. Implementar el pipeline completo con las suites ya validadas de manera independiente.
-3. Incorporar los quality gates y el archivado de reportes/evidencias.
-4. Realizar una corrida integrada, revisar fallos y actualizar este README con su resultado real.
+1. Incorporar un **quality gate automático sobre el JTL** que calcule p95 y tasa de éxito y falle el job ante incumplimientos de los criterios definidos.
+2. Mantener los **selectores y precondiciones Mobile** frente a cambios de onboarding, autenticación de visitante o interfaz.
+3. Ampliar, cuando esté justificado, la **cobertura negativa y la trazabilidad** entre escenarios manuales, tests automatizados y defectos.
+4. Revisar periódicamente las versiones de las **GitHub Actions**, las imágenes y los plugins de Jenkins para mantener la compatibilidad.
+5. Considerar mecanismos de publicación de reportes históricos de mayor duración si la retención de siete días es insuficiente para la evaluación.
 
 ---
 
-**Proyecto:** SportClub QA Challenge · **Enfoque:** QA Automation, testing funcional y performance controlada · **Estado:** suites modulares verificadas; integración CI con Jenkins pendiente.
+**SportClub QA Challenge** · QA Automation · Playwright · Maestro · Vitest · Newman · JMeter · Jenkins · Docker · GitHub Actions  
+**Última ejecución integral documentada:** [#8 — SUCCESS (6/6)](https://github.com/nicolasmaranesi/sportclubQaChallenge/actions/runs/42306162256) · **Fecha:** 6 de noviembre de 2026.

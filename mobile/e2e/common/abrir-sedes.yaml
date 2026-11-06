@@ -22,5 +22,4 @@ appId: com.muvinai.carnet2
     visible: "Sedes"
     timeout: 45000
 
-# Abrir Sedes.
 - tapOn: "Sedes"

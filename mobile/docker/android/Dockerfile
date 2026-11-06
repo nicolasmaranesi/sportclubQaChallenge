@@ -1,4 +1,4 @@
-FROM sportclub/android-playstore:13
+FROM ghcr.io/nicolasmaranesi/sportclub-android-playstore:13
 
 COPY launch-emulator.sh /android/sdk/launch-emulator.sh
 

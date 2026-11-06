@@ -12,9 +12,15 @@ appId: com.muvinai.carnet2
       - tapOn:
           id: "button-omitir"
 
+- runFlow:
+    when:
+      visible: "Ingreso sin registro"
+    commands:
+      - tapOn: "Ingreso sin registro"
+
 - extendedWaitUntil:
     visible: "Sedes"
     timeout: 45000
 
+# Abrir Sedes.
 - tapOn: "Sedes"
-

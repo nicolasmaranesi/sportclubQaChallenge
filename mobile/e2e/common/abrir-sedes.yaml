@@ -4,16 +4,17 @@ appId: com.muvinai.carnet2
 - launchApp:
     clearState: false
 
+- runFlow:
+    when:
+      visible:
+        id: "button-omitir"
+    commands:
+      - tapOn:
+          id: "button-omitir"
+
 - extendedWaitUntil:
     visible: "Sedes"
     timeout: 45000
 
 - tapOn: "Sedes"
 
-- extendedWaitUntil:
-    visible: "Filtros"
-    timeout: 30000
-
-- extendedWaitUntil:
-    visible: "Google Map"
-    timeout: 30000

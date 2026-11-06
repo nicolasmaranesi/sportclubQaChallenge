@@ -1,4 +1,3 @@
-
 timestamps {
     timeout(time: 70, unit: 'MINUTES') {
         try {
@@ -9,22 +8,23 @@ timestamps {
                     test -f mobile/e2e/sedes-visitante.yaml
                     mkdir -p mobile/e2e/evidence/jenkins
                     rm -f mobile/e2e/evidence/jenkins/maestro-junit.xml
+                    rm -f mobile/e2e/evidence/jenkins/ci-failure.png
+                    rm -f mobile/e2e/evidence/jenkins/ci-hierarchy.xml
+                    rm -f mobile/e2e/evidence/jenkins/ci-window-focus.txt
                 '''
             }
 
             stage('Construir imagenes Mobile') {
                 sh '''
                     set -eu
-                    docker compose -p mobile -f mobile/docker-compose.yml \
-                        build maestro android-emulator
+                    docker compose -p mobile -f mobile/docker-compose.yml build maestro android-emulator
                 '''
             }
 
             stage('Levantar emulador y Maestro') {
                 sh '''
                     set -eu
-                    docker compose -p mobile -f mobile/docker-compose.yml \
-                        up -d --no-build maestro
+                    docker compose -p mobile -f mobile/docker-compose.yml up -d --no-build maestro
                     docker compose -p mobile -f mobile/docker-compose.yml ps -a
                 '''
             }
@@ -32,27 +32,43 @@ timestamps {
             stage('Ejecutar Mobile E2E - Maestro') {
                 sh '''
                     set -eu
-                    docker compose -p mobile -f mobile/docker-compose.yml \
-                        exec -T maestro sh -lc 'mkdir -p /work/e2e/evidence/jenkins'
-                    docker compose -p mobile -f mobile/docker-compose.yml \
-                        exec -T maestro maestro --device android-emulator:5555 \
-                        test --format junit \
+                    docker compose -p mobile -f mobile/docker-compose.yml exec -T maestro \
+                        sh -lc 'mkdir -p /work/e2e/evidence/jenkins'
+
+                    set +e
+                    docker compose -p mobile -f mobile/docker-compose.yml exec -T maestro \
+                        maestro --device android-emulator:5555 test \
+                        --format junit \
                         --output /work/e2e/evidence/jenkins/maestro-junit.xml \
                         /work/e2e/sedes-visitante.yaml
+                    status=$?
+                    set -e
+
+                    if [ "$status" -ne 0 ]; then
+                        echo 'Maestro fallo; capturando pantalla y jerarquia Android...'
+                        docker compose -p mobile -f mobile/docker-compose.yml exec -T maestro \
+                            sh -lc '
+                                set +e
+                                adb connect android-emulator:5555
+                                adb -s android-emulator:5555 shell screencap -p /sdcard/ci-failure.png
+                                adb -s android-emulator:5555 pull /sdcard/ci-failure.png /work/e2e/evidence/jenkins/ci-failure.png
+                                adb -s android-emulator:5555 shell uiautomator dump /sdcard/ci-hierarchy.xml
+                                adb -s android-emulator:5555 pull /sdcard/ci-hierarchy.xml /work/e2e/evidence/jenkins/ci-hierarchy.xml
+                                adb -s android-emulator:5555 shell dumpsys window \
+                                    > /work/e2e/evidence/jenkins/ci-window-focus.txt
+                                exit 0
+                            ' || true
+                    fi
+
+                    exit "$status"
                 '''
             }
         } finally {
             stage('Publicar resultados Mobile E2E') {
                 catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
-                    junit(
-                        testResults: 'mobile/e2e/evidence/jenkins/maestro-junit.xml',
-                        allowEmptyResults: false
-                    )
+                    junit(testResults: 'mobile/e2e/evidence/jenkins/maestro-junit.xml', allowEmptyResults: false)
                 }
-                archiveArtifacts(
-                    artifacts: 'mobile/e2e/evidence/**',
-                    allowEmptyArchive: true
-                )
+                archiveArtifacts(artifacts: 'mobile/e2e/evidence/**', allowEmptyArchive: true)
             }
         }
     }

@@ -3,9 +3,9 @@ name: SportClub QA - Full Suite
 on:
   workflow_dispatch:
 
-
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: sportclub-full-suite-${{ github.ref }}
@@ -32,6 +32,7 @@ jobs:
           df -h /
           free -h
           command -v jq
+          command -v zip
 
       - name: Habilitar KVM para el emulador Android
         shell: bash
@@ -41,6 +42,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+          test -r /dev/kvm && test -w /dev/kvm
           ls -l /dev/kvm
 
       - name: Preparar configuración temporal de Jenkins
@@ -52,7 +54,6 @@ jobs:
           {
             printf 'JENKINS_ADMIN_PASSWORD=%s\n' "$password"
             printf 'PROJECT_ROOT=%s\n' "$GITHUB_WORKSPACE"
-            # Las imagenes de Vitest usan UID 1000. Los reportes se comparten mediante volumen.
             printf 'PUID=1000\n'
             printf 'PGID=1000\n'
           } >> "$GITHUB_ENV"
@@ -90,7 +91,21 @@ jobs:
           echo 'ERROR: Jenkins no logró inicializar el job.' >&2
           exit 1
 
+      - name: Autenticar Jenkins en GHCR
+        shell: bash
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker compose exec -T jenkins \
+            docker login ghcr.io --username "$GHCR_USER" --password-stdin
+          docker compose exec -T jenkins docker manifest inspect \
+            ghcr.io/nicolasmaranesi/sportclub-android-playstore:13 > /dev/null
+          echo 'GHCR: Jenkins autenticado e imagen Android disponible.'
+
       - name: Ejecutar 00-Full-Suite y esperar resultado
+        id: run_suite
         shell: bash
         run: |
           set -euo pipefail
@@ -99,7 +114,6 @@ jobs:
           cookies="$(mktemp)"
           trap 'rm -f "$cookies"' EXIT
 
-          # El admin se autentica con contraseña; Jenkins requiere crumb + cookie.
           crumb_json="$(curl --fail --silent --show-error -c "$cookies" \
             -u "admin:${JENKINS_ADMIN_PASSWORD}" "$base/crumbIssuer/api/json")"
           crumb_field="$(jq -r '.crumbRequestField' <<< "$crumb_json")"
@@ -114,7 +128,6 @@ jobs:
             -X POST "$job/build?delay=0sec" -o /dev/null
 
           echo '00-Full-Suite solicitado. Esperando las seis suites...'
-          # Jenkins es temporal y comienza sin builds anteriores.
           for attempt in $(seq 1 1050); do
             result_json="$(curl --silent --show-error --fail --max-time 8 \
               -u "admin:${JENKINS_ADMIN_PASSWORD}" \
@@ -147,6 +160,89 @@ jobs:
               -o "ci-artifacts/$suite.log" || true
           done
 
+      - name: Resumen de los seis pipelines
+        id: summary
+        if: always()
+        shell: bash
+        env:
+          SUITE_OUTCOME: ${{ steps.run_suite.outcome }}
+        run: |
+          set -uo pipefail
+          mkdir -p ci-artifacts
+          case "$SUITE_OUTCOME" in
+            success) overall='SUCCESS' ;;
+            failure) overall='FAILURE' ;;
+            *) overall='INCOMPLETE' ;;
+          esac
+          printf 'status=%s\n' "$overall" >> "$GITHUB_OUTPUT"
+
+          report_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          {
+            echo "# SportClub QA - ${overall}"
+            echo
+            echo "Ejecución: #${GITHUB_RUN_NUMBER}"
+            echo "Repositorio: ${GITHUB_REPOSITORY}"
+            echo "Commit: ${GITHUB_SHA}"
+            echo "Resultados y evidencias: ${report_url}"
+            echo
+            echo 'Resultados individuales:'
+          } > ci-artifacts/email-body.txt
+          {
+            echo "### SportClub QA - ${overall}"
+            echo
+            echo '| Pipeline | Resultado |'
+            echo '| --- | --- |'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          base='http://127.0.0.1:8085/job/SportClub-Tests/job'
+          for suite in 01-Backend-API 02-Web-Unit 03-Mobile-Unit 04-Web-E2E 05-Mobile-E2E 06-Performance; do
+            result_json="$(curl --silent --show-error --fail --max-time 10 \
+              -u "admin:${JENKINS_ADMIN_PASSWORD:-}" \
+              "$base/$suite/lastBuild/api/json?tree=result" 2>/dev/null || true)"
+            result='NOT_EXECUTED'
+            if [[ -n "$result_json" ]]; then
+              result="$(jq -r '.result // "UNKNOWN"' <<< "$result_json" 2>/dev/null || echo UNKNOWN)"
+            fi
+            printf '%s: %s\n' "$suite" "$result" >> ci-artifacts/email-body.txt
+            printf '| %s | %s |\n' "$suite" "$result" >> "$GITHUB_STEP_SUMMARY"
+            echo "$suite: $result"
+          done
+          printf '\nReportes completos disponibles en GitHub Actions -> Artifacts.\n' \
+            >> ci-artifacts/email-body.txt
+
+      - name: Preparar ZIP compacto para el correo
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mail-package
+          if [[ -f ci-artifacts/email-body.txt ]]; then
+            cp ci-artifacts/email-body.txt mail-package/resumen.txt
+          else
+            echo 'Consultar el resultado de GitHub Actions.' > mail-package/resumen.txt
+          fi
+
+          # Adjuntar los JUnit XML y HTML pequeños; videos y capturas quedan como artifacts.
+          for folder in backend/reports web/reports mobile/reports mobile/e2e/evidence/jenkins stress/reports; do
+            if [[ -d "$folder" ]]; then
+              while IFS= read -r -d '' file; do
+                cp --parents -- "$file" mail-package/
+              done < <(find "$folder" -type f \( -name '*.xml' -o -name '*.html' \) -size -2M -print0)
+            fi
+          done
+
+          (cd mail-package && zip -qr ../sportclub-qa-report.zip .)
+          size="$(stat -c '%s' sportclub-qa-report.zip)"
+          if (( size > 15 * 1024 * 1024 )); then
+            echo 'ZIP grande: se enviará solo el resumen. Los reportes completos quedan en GitHub.'
+            rm -f sportclub-qa-report.zip
+            rm -rf mail-package
+            mkdir -p mail-package
+            cp ci-artifacts/email-body.txt mail-package/resumen.txt
+            (cd mail-package && zip -qr ../sportclub-qa-report.zip .)
+          fi
+          ls -lh sportclub-qa-report.zip
+
       - name: Publicar reportes y evidencias
         if: always()
         uses: actions/upload-artifact@v4
@@ -156,6 +252,7 @@ jobs:
           if-no-files-found: warn
           path: |
             ci-artifacts/**
+            sportclub-qa-report.zip
             backend/reports/**
             web/reports/**
             web/playwright-report/**
@@ -163,3 +260,33 @@ jobs:
             mobile/reports/**
             mobile/e2e/evidence/**
             stress/reports/**
+
+      - name: Verificar configuración de correo
+        id: mail_config
+        if: always()
+        shell: bash
+        env:
+          SMTP_USER: ${{ secrets.MAIL_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+        run: |
+          if [[ -n "$SMTP_USER" && -n "$SMTP_PASSWORD" ]]; then
+            echo 'enabled=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'enabled=false' >> "$GITHUB_OUTPUT"
+            echo '::warning::No se envió correo: faltan MAIL_USERNAME o MAIL_PASSWORD en GitHub Secrets.'
+          fi
+
+      - name: Enviar resultados por Gmail
+        if: ${{ always() && steps.mail_config.outputs.enabled == 'true' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: 'SportClub QA <${{ secrets.MAIL_USERNAME }}>'
+          to: nicolas.maranesi@gmail.com
+          subject: 'SportClub QA - ${{ steps.summary.outputs.status }} - Ejecución #${{ github.run_number }}'
+          body: file://ci-artifacts/email-body.txt
+          attachments: sportclub-qa-report.zip

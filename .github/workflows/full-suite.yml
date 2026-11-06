@@ -146,19 +146,67 @@ jobs:
           echo 'ERROR: Se agotó el tiempo de espera de Jenkins.' >&2
           exit 1
 
-      - name: Recuperar logs de Jenkins y de las seis suites
+      - name: Recuperar logs de Jenkins, suites y Android
         if: always()
         shell: bash
         run: |
+          set -uo pipefail
           mkdir -p ci-artifacts
-          docker compose logs --no-color jenkins > ci-artifacts/jenkins-container.log 2>&1 || true
+
+          # Servidor Jenkins
+          docker compose logs --no-color jenkins \
+            > ci-artifacts/jenkins-container.log 2>&1 || true
+
+          # Resultados completos de cada pipeline de Jenkins
           base='http://127.0.0.1:8085/job/SportClub-Tests/job'
-          for suite in 00-Full-Suite 01-Backend-API 02-Web-Unit 03-Mobile-Unit 04-Web-E2E 05-Mobile-E2E 06-Performance; do
+          for suite in \
+            00-Full-Suite \
+            01-Backend-API \
+            02-Web-Unit \
+            03-Mobile-Unit \
+            04-Web-E2E \
+            05-Mobile-E2E \
+            06-Performance
+          do
             curl --silent --show-error --fail --max-time 30 \
               -u "admin:${JENKINS_ADMIN_PASSWORD:-}" \
               "$base/$suite/lastBuild/consoleText" \
               -o "ci-artifacts/$suite.log" || true
           done
+
+          # Estado de todos los contenedores Mobile (incluidos los finalizados)
+          docker compose -p mobile -f mobile/docker-compose.yml ps -a \
+            > ci-artifacts/mobile-containers.txt 2>&1 || true
+
+          # Logs de setup: clave para identificar por qué no arranca Maestro
+          docker compose -p mobile -f mobile/docker-compose.yml \
+            logs --no-color --timestamps android-setup \
+            > ci-artifacts/android-setup.log 2>&1 || true
+
+          docker compose -p mobile -f mobile/docker-compose.yml \
+            logs --no-color --timestamps --tail=300 android-emulator \
+            > ci-artifacts/android-emulator.log 2>&1 || true
+
+          docker compose -p mobile -f mobile/docker-compose.yml \
+            logs --no-color --timestamps maestro \
+            > ci-artifacts/maestro-container.log 2>&1 || true
+
+          docker compose -p mobile -f mobile/docker-compose.yml \
+            logs --no-color --timestamps adb-keygen \
+            > ci-artifacts/adb-keygen.log 2>&1 || true
+
+          # Diagnóstico de recursos del runner
+          docker system df > ci-artifacts/docker-disk.txt 2>&1 || true
+          df -h / > ci-artifacts/runner-disk.txt 2>&1 || true
+          free -h > ci-artifacts/runner-memory.txt 2>&1 || true
+
+          # Un extracto visible directamente en GitHub Actions
+          echo '========== ANDROID SETUP (últimas 100 líneas) =========='
+          tail -n 100 ci-artifacts/android-setup.log || true
+          echo '========== ESTADO DE CONTENEDORES =========='
+          cat ci-artifacts/mobile-containers.txt || true
+          echo '========== ESPACIO DISPONIBLE =========='
+          cat ci-artifacts/runner-disk.txt || true
 
       - name: Resumen de los seis pipelines
         id: summary

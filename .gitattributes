@@ -1,0 +1,1 @@
+mobile/apks/sportclub/x86_64/*.apk filter=lfs diff=lfs merge=lfs -text
